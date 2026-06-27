@@ -1,16 +1,21 @@
-//! 実行共通層 (§9): allowlist → dcg → プロセス起動 → JSONL を job:* で逐次 emit。
+//! 実行共通層 (§9): allowlist → dcg → プロセス起動 → job:* を [`EventSink`] へ emit。
 //!
 //! すべての外部プロセス起動はこの層を通す。任意コマンド実行はしない（§9 シェル実行）。
+//! イベント配信先はトランスポート非依存の [`EventSink`]（Tauri=app.emit / Bridge=SSE）。
 
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
-use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use serde_json::json;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
-use crate::dcg;
+/// イベント配信の抽象。`event` 名 + JSON ペイロードを fire-and-forget で送る。
+/// 実装: Tauri = `AppHandle::emit` ラッパ / Bridge = tokio broadcast → SSE。
+pub trait EventSink: Send + Sync {
+    fn emit(&self, event: &str, payload: serde_json::Value);
+}
 
 /// allowlist。Tauri の shell scope と整合（§9: codex / git / launchctl / 同梱scripts）。
 const ALLOWED: &[&str] = &["codex", "git", "launchctl", "bash", "sh"];
@@ -32,40 +37,6 @@ pub enum ExecError {
     Spawn(String),
 }
 
-#[derive(Serialize, Clone)]
-struct JobLog<'a> {
-    #[serde(rename = "jobId")]
-    job_id: &'a str,
-    line: String,
-    stream: &'a str,
-}
-
-#[derive(Serialize, Clone)]
-struct JobEvent<'a> {
-    #[serde(rename = "jobId")]
-    job_id: &'a str,
-    #[serde(rename = "type")]
-    kind: String,
-    payload: serde_json::Value,
-}
-
-#[derive(Serialize, Clone)]
-struct JobDone<'a> {
-    #[serde(rename = "jobId")]
-    job_id: &'a str,
-    #[serde(rename = "exitCode")]
-    exit_code: i32,
-    #[serde(rename = "durationMs")]
-    duration_ms: u128,
-}
-
-#[derive(Serialize, Clone)]
-struct Notify {
-    level: String,
-    title: String,
-    body: String,
-}
-
 /// 同期実行して stdout を取得（guard 通過必須）。worktree 一覧・login status 等の即時取得用。
 /// 失敗時は Err を返し、呼び出し側は mock にフォールバックする。
 pub fn run_capture(argv: &[String], cwd: Option<&str>) -> Result<String, ExecError> {
@@ -79,7 +50,7 @@ pub fn run_capture(argv: &[String], cwd: Option<&str>) -> Result<String, ExecErr
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
-/// allowlist 検査 + dcg 検査。起動前のゲート。
+/// allowlist 検査 + dcg 検査。起動前のゲート（§14.2）。
 pub fn guard(argv: &[String]) -> Result<(), ExecError> {
     let Some(exe) = argv.first() else {
         return Err(ExecError::NotAllowed(String::new()));
@@ -96,9 +67,9 @@ pub fn guard(argv: &[String]) -> Result<(), ExecError> {
 
 /// 非同期にコマンドを起動し、stdout/stderr を行単位で job:log として emit。
 /// JSON 行として解釈できれば job:event も emit（codex --json 対応）。
-/// 完了時に job:done を emit。spawn 前に guard を通す。
+/// 完了時に job:done を emit。spawn 前に必ず guard を通す（allowlist + dcg）。
 pub async fn spawn_streamed(
-    app: AppHandle,
+    sink: Arc<dyn EventSink>,
     job_id: String,
     argv: Vec<String>,
     cwd: Option<String>,
@@ -106,13 +77,9 @@ pub async fn spawn_streamed(
     // ① allowlist + ② dcg
     if let Err(e) = guard(&argv) {
         // ③ 遮断は notify で画面通知（§14.2）。
-        let _ = app.emit(
+        sink.emit(
             "notify",
-            Notify {
-                level: "error".into(),
-                title: "コマンド遮断 (dcg)".into(),
-                body: e.to_string(),
-            },
+            json!({ "level": "error", "title": "コマンド遮断 (dcg)", "body": e.to_string() }),
         );
         return Err(e);
     }
@@ -125,15 +92,13 @@ pub async fn spawn_streamed(
     }
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| ExecError::Spawn(e.to_string()))?;
+    let mut child = cmd.spawn().map_err(|e| ExecError::Spawn(e.to_string()))?;
 
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
 
     if let Some(out) = stdout {
-        let app = app.clone();
+        let sink = sink.clone();
         let jid = job_id.clone();
         tokio::spawn(async move {
             let mut lines = BufReader::new(out).lines();
@@ -145,56 +110,31 @@ pub async fn spawn_streamed(
                         .and_then(|v| v.as_str())
                         .unwrap_or("event")
                         .to_string();
-                    let _ = app.emit(
-                        "job:event",
-                        JobEvent {
-                            job_id: &jid,
-                            kind,
-                            payload: val,
-                        },
-                    );
+                    sink.emit("job:event", json!({ "jobId": jid, "type": kind, "payload": val }));
                 }
-                let _ = app.emit(
-                    "job:log",
-                    JobLog {
-                        job_id: &jid,
-                        line,
-                        stream: "stdout",
-                    },
-                );
+                sink.emit("job:log", json!({ "jobId": jid, "line": line, "stream": "stdout" }));
             }
         });
     }
 
     if let Some(err) = stderr {
-        let app = app.clone();
+        let sink = sink.clone();
         let jid = job_id.clone();
         tokio::spawn(async move {
             let mut lines = BufReader::new(err).lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                let _ = app.emit(
-                    "job:log",
-                    JobLog {
-                        job_id: &jid,
-                        line,
-                        stream: "stderr",
-                    },
-                );
+                sink.emit("job:log", json!({ "jobId": jid, "line": line, "stream": "stderr" }));
             }
         });
     }
 
-    let app2 = app.clone();
+    let sink2 = sink.clone();
     let jid = job_id.clone();
     tokio::spawn(async move {
         let code = child.wait().await.ok().and_then(|s| s.code()).unwrap_or(-1);
-        let _ = app2.emit(
+        sink2.emit(
             "job:done",
-            JobDone {
-                job_id: &jid,
-                exit_code: code,
-                duration_ms: started.elapsed().as_millis(),
-            },
+            json!({ "jobId": jid, "exitCode": code, "durationMs": started.elapsed().as_millis() as u64 }),
         );
     });
 

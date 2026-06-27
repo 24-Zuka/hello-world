@@ -1,7 +1,5 @@
-# Standalone workspace so the guard can be built/tested without the GUI crate's
-# system dependencies (webkit/gtk), enabling verification on Linux CI.
-[workspace]
-
+# Part of the src-tauri workspace. Still builds/tests GUI-free on Linux via
+# `cargo test -p dcg` — no webkit/gtk needed.
 [package]
 name = "dcg"
 version = "1.0.0"

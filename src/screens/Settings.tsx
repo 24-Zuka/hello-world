@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 
 import { Button, Card, Pill, ScreenHeader } from "../components/ui";
-import { api } from "../lib/api";
+import { api, isTauri } from "../lib/api";
+import * as bridge from "../lib/bridge";
 import { useCockpit } from "../store/cockpit";
 import type { McpServer } from "../types";
 
 // Settings（設定, §4.8）: パス・トークン・接続の管理。APIキー欄は無し（§9）。
 export function Settings() {
   const settings = useCockpit((s) => s.settings);
+  const transport = useCockpit((s) => s.transport);
   const pushToast = useCockpit((s) => s.pushToast);
 
   const [vaultPath, setVaultPath] = useState("");
@@ -17,6 +19,37 @@ export function Settings() {
   const [obsToken, setObsToken] = useState("");
   const [mcp, setMcp] = useState<McpServer[]>([]);
   const [lmStatus, setLmStatus] = useState<"idle" | "ok" | "down">("idle");
+
+  // ブリッジ接続（ハイブリッド）。
+  const [bridgeUrl, setBridgeUrl] = useState(
+    bridge.getBridgeConfig().url || "http://127.0.0.1:8787"
+  );
+  const [bridgeToken, setBridgeToken] = useState("");
+  const [connecting, setConnecting] = useState(false);
+
+  const onConnectBridge = async () => {
+    setConnecting(true);
+    const ok = await bridge.connectBridge(bridgeUrl, bridgeToken);
+    setConnecting(false);
+    if (ok) {
+      pushToast({ level: "info", title: "ブリッジ接続", body: "接続しました。実連携を有効化します…" });
+      setBridgeToken("");
+      // 接続後はクリーンに全画面を実連携へ切り替えるため再読込（重複購読を防ぐ）。
+      setTimeout(() => window.location.reload(), 700);
+    } else {
+      pushToast({
+        level: "warn",
+        title: "接続できません",
+        body: "Mac で jarvis-bridge が起動中か、URL/トークンが正しいか確認してください。",
+      });
+    }
+  };
+
+  const onDisconnectBridge = () => {
+    bridge.disconnectBridge();
+    pushToast({ level: "info", title: "切断", body: "デモ（モック）表示に戻します…" });
+    setTimeout(() => window.location.reload(), 500);
+  };
 
   useEffect(() => {
     if (settings) {
@@ -63,6 +96,43 @@ export function Settings() {
     <div className="flex h-full flex-col">
       <ScreenHeader title="Settings" jp="設定" />
       <div className="grid flex-1 grid-cols-2 gap-4 overflow-auto p-6">
+        {!isTauri() && (
+          <Card title="ブリッジ接続（実連携）" className="col-span-2">
+            <p className="mb-3 text-[12px] text-base-400">
+              この公開アプリは、あなたのMacで動く <span className="mono">jarvis-bridge</span> 経由で
+              実 Codex / Obsidian / LM Studio に接続します（§ハイブリッド）。
+              ブリッジを起動し、表示された <b>Token</b> を貼り付けてください。
+            </p>
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <Field label="ブリッジ URL" value={bridgeUrl} onChange={setBridgeUrl} />
+              </div>
+              <div className="flex-1">
+                <Field label="Token（起動時に表示）" value={bridgeToken} onChange={setBridgeToken} password />
+              </div>
+            </div>
+            <div className="mt-2 flex items-center gap-3">
+              {transport === "bridge" ? (
+                <>
+                  <Pill tone="ok">● 接続中（実連携）</Pill>
+                  <Button onClick={onDisconnectBridge}>切断</Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="primary" onClick={onConnectBridge} disabled={connecting || !bridgeToken}>
+                    {connecting ? "接続中…" : "接続"}
+                  </Button>
+                  <Pill tone="muted">未接続（デモはモック表示）</Pill>
+                </>
+              )}
+            </div>
+            <p className="mt-2 text-[11px] text-base-500">
+              未接続でも 8 画面はモックデータで操作できます。Token はこのブラウザにのみ保存（localStorage）。
+              入手方法は <span className="mono">docs/BRIDGE.md</span> を参照。
+            </p>
+          </Card>
+        )}
+
         <Card title="パス">
           <Field label="Vault" value={vaultPath} onChange={setVaultPath} />
           <Field label="リポジトリ親" value={reposParent} onChange={setReposParent} />

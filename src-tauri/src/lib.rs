@@ -1,20 +1,13 @@
-//! JARVIS Cockpit — Tauri バックエンド。
-//! GUI は薄いラッパー(§1)。頭脳は Codex / ローカルモデルに置き、本層は
-//! 「状態の表示」と「操作の発火」に徹する。
+//! JARVIS Cockpit — Tauri バックエンド（デスクトップ・トランスポート）。
+//! GUI は薄いラッパー(§1)。頭脳は GUI 非依存の `jarvis_cockpit_core` に置き、
+//! 本層は core コマンドを Tauri の invoke/emit に橋渡しするだけ。
 
 mod commands;
-mod exec;
-mod mock;
-mod models;
-mod obsidian;
-mod secrets;
-mod state;
 
 use std::time::Duration;
 
+use jarvis_cockpit_core::Cockpit;
 use tauri::{Emitter, Manager};
-
-use state::Cockpit;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -29,10 +22,10 @@ pub fn run() {
                 loop {
                     ticker.tick().await;
                     let state = handle.state::<Cockpit>();
-                    if let Ok(h) = commands::health_check(state.clone()).await {
+                    if let Ok(h) = jarvis_cockpit_core::commands::health_check(state.inner()).await {
                         let _ = handle.emit("health:tick", h);
                     }
-                    if let Ok(q) = commands::quota_status(state) {
+                    if let Ok(q) = jarvis_cockpit_core::commands::quota_status(state.inner()) {
                         let _ = handle.emit("quota:tick", q);
                     }
                 }

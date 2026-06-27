@@ -1,5 +1,7 @@
-// イベント購読の統一層（§7.2）。Tauri 内なら listen、ブラウザなら browserMock のバス。
+// イベント購読の統一層（§7.2）。トランスポートに応じて配信元を切り替える:
+//   Tauri=listen / Bridge=SSE(bridgeOn) / ブラウザ単体=browserMock バス。
 import { isTauri } from "./api";
+import * as bridge from "./bridge";
 import * as browserMock from "./browserMock";
 
 export type JobLog = { jobId: string; line: string; stream: "stdout" | "stderr" };
@@ -13,10 +15,14 @@ export async function listen<T>(event: string, handler: (payload: T) => void): P
     const un = await tauriListen<T>(event, (e) => handler(e.payload));
     return un;
   }
+  if (bridge.isBridgeActive()) {
+    return bridge.bridgeOn(event, (p) => handler(p as T));
+  }
   return browserMock.on(event, (p) => handler(p as T));
 }
 
-// ブラウザ起動時は擬似 tick を開始（実 Tauri は Rust 側が emit）。
+// tick の発火元: Tauri/Bridge は Rust 側が実 emit。ブラウザ単体のみ擬似 tick。
 export function startBackgroundTicks() {
-  if (!isTauri()) browserMock.startTicks();
+  if (isTauri() || bridge.isBridgeActive()) return;
+  browserMock.startTicks();
 }
