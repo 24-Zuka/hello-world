@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: #0e1116;
+  color: #e6e9ef;
+  font-family: theme("fontFamily.sans");
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ログ/差分の等幅（§6） */
+.mono {
+  font-family: theme("fontFamily.mono");
+  font-variant-ligatures: none;
+}
+
+/* ストリーミングログのみライブ更新を強調（§6 モーション） */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.live-dot {
+  animation: pulse-soft 1.4s ease-in-out infinite;
+}
+
+/* スクロールバー控えめ */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2a323e; border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }

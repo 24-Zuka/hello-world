@@ -1,0 +1,17 @@
+# Standalone workspace so the guard can be built/tested without the GUI crate's
+# system dependencies (webkit/gtk), enabling verification on Linux CI.
+[workspace]
+
+[package]
+name = "dcg"
+version = "1.0.0"
+description = "Destructive Command Guard — standalone, no GUI deps (§14.2)"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "dcg"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }

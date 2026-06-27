@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "JARVIS Cockpit",
+  "version": "1.0.0",
+  "identifier": "org.jarvis.cockpit",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5180",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "JARVIS Cockpit",
+        "width": 1280,
+        "height": 840,
+        "minWidth": 1024,
+        "minHeight": 720,
+        "theme": "Dark",
+        "titleBarStyle": "Overlay"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:27123 http://localhost:1234"
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true,
+      "scope": [
+        { "name": "codex", "cmd": "codex", "args": true },
+        { "name": "git", "cmd": "git", "args": true },
+        { "name": "launchctl", "cmd": "launchctl", "args": true }
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "icon": ["icons/icon.png"],
+    "category": "DeveloperTool",
+    "shortDescription": "Local control panel for jarvis-codex-org",
+    "longDescription": "JARVIS Cockpit visualizes and operates the jarvis-codex-org agent organization (Codex × LM Studio × Obsidian) from a single local desktop panel, enforcing the zero-metered-billing discipline at the UI level."
+  }
+}
