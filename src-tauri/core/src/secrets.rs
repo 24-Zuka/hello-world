@@ -4,7 +4,8 @@
 //! 非 macOS（このLinuxのCI/開発環境）では Keychain が無いため「未対応」を返し、
 //! 平文ファイルへのフォールバックは**しない**（課金/秘匿事故防止）。
 
-/// Keychain サービス名。
+/// Keychain サービス名（macOS 以外ではガード関数が無効化されるため未使用）。
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const SERVICE: &str = "org.jarvis.cockpit";
 
 /// 鍵に対応するトークンが保管済みかを返す（値そのものは返さない）。

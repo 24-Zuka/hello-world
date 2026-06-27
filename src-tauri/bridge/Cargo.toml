@@ -1,0 +1,23 @@
+# ローカルブリッジ: 公開Webアプリ（GitHub Pages）と、ユーザーのMac上で動く実
+# Codex/Obsidian/LM Studio を仲介する 127.0.0.1 専用 HTTP/SSE サーバー。
+# core を再利用するだけで tauri/webkit に依存しないため Linux でもビルド/実行できる。
+[package]
+name = "jarvis-bridge"
+version = "1.0.0"
+description = "JARVIS Cockpit local bridge — exposes the §7 IPC contract over localhost HTTP/SSE"
+edition = "2021"
+rust-version = "1.77"
+
+[[bin]]
+name = "jarvis-bridge"
+path = "src/main.rs"
+
+[dependencies]
+jarvis-cockpit-core = { path = "../core" }
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.8"
