@@ -1,0 +1,56 @@
+# Builds the JARVIS Cockpit frontend and publishes it to GitHub Pages.
+# The published site is the browserMock-driven demo: outside the Tauri runtime,
+# src/lib/browserMock.ts stands in for the Rust backend so all 8 screens are
+# interactive with simulated data. Real Codex / LM Studio / Obsidian integration
+# only runs in the local macOS .app (see docs/SETUP_MAC.md).
+name: Deploy demo to GitHub Pages
+
+on:
+  push:
+    branches: [claude/system-app-creation-uxvdo1]
+  workflow_dispatch:
+
+# Allow the deploy job to create the Pages deployment and mint the OIDC token.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deploy at a time; let an in-progress run finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build (tsc type-check + Vite)
+        run: npm run build
+      # enablement: true auto-creates the Pages site on first run.
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
