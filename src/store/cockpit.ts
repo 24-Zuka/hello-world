@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
-import { api } from "../lib/api";
+import { api, isTauri } from "../lib/api";
+import * as bridge from "../lib/bridge";
 import { listen, startBackgroundTicks } from "../lib/events";
 import type {
   ApprovalRequest,
@@ -19,8 +20,12 @@ interface Toast {
   body: string;
 }
 
+// 現在の通信経路（§ハイブリッド）。HealthBar / Settings が参照する。
+export type Transport = "tauri" | "bridge" | "mock";
+
 interface CockpitState {
   screen: ScreenId;
+  transport: Transport;
   health: Health | null;
   quota: Quota | null;
   auth: AuthStatus | null;
@@ -49,6 +54,7 @@ let toastSeq = 1;
 
 export const useCockpit = create<CockpitState>((set, get) => ({
   screen: "dashboard",
+  transport: "mock",
   health: null,
   quota: null,
   auth: null,
@@ -95,6 +101,17 @@ export const useCockpit = create<CockpitState>((set, get) => ({
     }),
 
   init: async () => {
+    // ハイブリッド: Tauri 外なら設定済みブリッジへ自動再接続を試みる。
+    if (!isTauri()) {
+      await bridge.autoConnect();
+    }
+    const transport: Transport = isTauri()
+      ? "tauri"
+      : bridge.isBridgeActive()
+        ? "bridge"
+        : "mock";
+    set({ transport });
+
     const [health, quota, auth, settings] = await Promise.all([
       api.healthCheck(),
       api.quotaStatus(),

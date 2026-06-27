@@ -4,11 +4,17 @@
 1 つのローカル・デスクトップ管制盤から可視化・操作するための GUI です。
 仕様書 *JARVIS Cockpit GUI 仕様書 v1.0*（2026-06-27）に基づく v1 実装。
 
-> 🌐 **公開デモ（モックデータ・閲覧用）**: https://24-zuka.github.io/hello-world/
-> ブラウザ単体で 8 画面を操作できます（`browserMock` がバックエンドを代替）。
-> **実連携**（実際の Codex / LM Studio / Obsidian）は Mac 実機の `.app` でのみ動作します
-> → [docs/SETUP_MAC.md](docs/SETUP_MAC.md)。公開 Web は localhost のローカルサービスへ
-> 技術的に接続できないため、デモはシミュレーションです（§9 ローカル専用設計）。
+> 🌐 **公開Webアプリ**: https://24-zuka.github.io/hello-world/
+> ブラウザだけで 8 画面を操作できます。バックエンドは 3 トランスポートで動作:
+>
+> | モード | 接続先 | 用途 |
+> |---|---|---|
+> | **Demo（モック）** | `browserMock` | 公開URLで誰でもお試し。既定。 |
+> | **Bridge（実連携）** | Mac で起動する `jarvis-bridge`（127.0.0.1） | 公開UIから実 Codex/LM Studio/Obsidian を操作（ハイブリッド）。→ [docs/BRIDGE.md](docs/BRIDGE.md) |
+> | **Desktop** | Tauri `.app`（同梱 Rust） | ネイティブ・デスクトップ。→ [docs/SETUP_MAC.md](docs/SETUP_MAC.md) |
+>
+> 公開Webサーバーは localhost に届かないため、**実連携はローカルブリッジが仲介**します
+> （秘密は Mac の Keychain に留まる, §9）。Settings →「ブリッジ接続」で URL とトークンを入力。
 
 > **設計の核**: GUI は薄いラッパー。頭脳は Codex / ローカルモデルに置き、本アプリは
 > 「状態の表示」と「操作の発火」に徹します。**課金ゼロの規律を UI レベルで強制**し、
@@ -92,7 +98,11 @@ Commands / Events の一覧は仕様書 §7 および `src-tauri/src/commands.rs
 
 ```
 src/                React フロント（screens / components / lib / store）
-src-tauri/          Tauri Rust バックエンド（commands / exec / obsidian / secrets）
-src-tauri/dcg/      Destructive Command Guard（GUI 非依存・単体テスト可）
+                    lib/api.ts が Tauri / Bridge / mock の 3 トランスポートを切替
+src-tauri/          Cargo ワークスペース
+  core/             GUI 非依存の共有頭脳（commands / exec / obsidian / secrets / mock）
+  bridge/           ローカル仲介 HTTP/SSE サーバー（core を再利用・Linux でもビルド可）
+  dcg/              Destructive Command Guard（GUI 非依存・単体テスト可）
+  src/              Tauri デスクトップ層（core への薄いラッパ）
 scripts/            jarvis-codex-org スクリプトのプレースホルダ / 契約
 ```

@@ -12,6 +12,7 @@ import type {
   VaultNode,
   Worktree,
 } from "../types";
+import * as bridge from "./bridge";
 import * as browserMock from "./browserMock";
 
 // Tauri ランタイム内かどうか。__TAURI_INTERNALS__ は Tauri v2 が注入する。
@@ -19,10 +20,15 @@ export const isTauri = (): boolean =>
   typeof window !== "undefined" &&
   ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
 
+// トランスポート優先順位（§ハイブリッド）:
+//   Tauri（デスクトップ） → Bridge（ローカル実連携） → browserMock（公開デモ）。
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (isTauri()) {
     const { invoke } = await import("@tauri-apps/api/core");
     return invoke<T>(cmd, args);
+  }
+  if (bridge.isBridgeActive()) {
+    return bridge.bridgeInvoke<T>(cmd, args);
   }
   return browserMock.invoke<T>(cmd, args);
 }
