@@ -1,21 +1,16 @@
-// JSON file storage (§3). board.json (active) + archive.json (completed).
-// No database. Writes are atomic (temp file + rename) and serialized through a
-// single in-process mutex so concurrent PATCH/POST requests can't corrupt a file.
+// Storage layer — auto-selects Vercel Blob (cloud) or local JSON files (dev).
+// When BLOB_READ_WRITE_TOKEN is set, board/archive live in Vercel Blob Storage.
+// Otherwise they live in data/board.json and data/archive.json on disk.
 
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import type { Task } from "@/types";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const BOARD_PATH = path.join(DATA_DIR, "board.json");
-const ARCHIVE_PATH = path.join(DATA_DIR, "archive.json");
+const useBlob = !!process.env.BLOB_READ_WRITE_TOKEN;
 
-// Promise-chain mutex: every mutating section awaits the previous one.
+// ---- Promise-chain mutex (shared by both backends) ----
 let lock: Promise<unknown> = Promise.resolve();
 
 function withLock<T>(fn: () => Promise<T>): Promise<T> {
   const run = lock.then(fn, fn);
-  // keep the chain alive but swallow rejection so one failure doesn't poison it
   lock = run.then(
     () => undefined,
     () => undefined,
@@ -23,7 +18,31 @@ function withLock<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
-async function readFile(file: string): Promise<Task[]> {
+// ---- Vercel Blob backend ----
+async function blobRead(name: string): Promise<Task[]> {
+  const { list, getDownloadUrl } = await import("@vercel/blob");
+  const { blobs } = await list({ prefix: name, limit: 1 });
+  if (blobs.length === 0) return [];
+  const url = getDownloadUrl(blobs[0].url);
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return Array.isArray(data) ? (data as Task[]) : [];
+}
+
+async function blobWrite(name: string, data: Task[]): Promise<void> {
+  const { put } = await import("@vercel/blob");
+  await put(name, JSON.stringify(data, null, 2), {
+    access: "public",
+    addRandomSuffix: false,
+  });
+}
+
+// ---- Local file backend ----
+async function fileRead(name: string): Promise<Task[]> {
+  const { promises: fs } = await import("node:fs");
+  const path = await import("node:path");
+  const file = path.join(process.cwd(), "data", name);
   try {
     const raw = await fs.readFile(file, "utf8");
     const parsed = JSON.parse(raw);
@@ -34,33 +53,34 @@ async function readFile(file: string): Promise<Task[]> {
   }
 }
 
-async function writeFileAtomic(file: string, data: Task[]): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
+async function fileWrite(name: string, data: Task[]): Promise<void> {
+  const { promises: fs } = await import("node:fs");
+  const path = await import("node:path");
+  const dir = path.join(process.cwd(), "data");
+  await fs.mkdir(dir, { recursive: true });
+  const file = path.join(dir, name);
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data, null, 2) + "\n", "utf8");
   await fs.rename(tmp, file);
 }
 
+// ---- Public API ----
+const read = useBlob ? blobRead : fileRead;
+const write = useBlob ? blobWrite : fileWrite;
+
 export function readBoard(): Promise<Task[]> {
-  return readFile(BOARD_PATH);
+  return read("board.json");
 }
-
 export function readArchive(): Promise<Task[]> {
-  return readFile(ARCHIVE_PATH);
+  return read("archive.json");
 }
-
 export function writeBoard(tasks: Task[]): Promise<void> {
-  return writeFileAtomic(BOARD_PATH, tasks);
+  return write("board.json", tasks);
 }
-
 export function writeArchive(tasks: Task[]): Promise<void> {
-  return writeFileAtomic(ARCHIVE_PATH, tasks);
+  return write("archive.json", tasks);
 }
 
-/**
- * Run a read-modify-write transaction against board + archive under the mutex.
- * The mutator receives current arrays and returns the arrays to persist.
- */
 export function transact<T>(
   fn: (state: { board: Task[]; archive: Task[] }) => Promise<{
     board?: Task[];
