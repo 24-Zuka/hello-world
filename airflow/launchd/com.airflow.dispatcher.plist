@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  AIRFLOW dispatcher — runs every morning at 07:30 (§8.5).
+  Install:
+    1. Replace YOURNAME with your macOS username (path to the airflow checkout).
+    2. cp launchd/com.airflow.dispatcher.plist ~/Library/LaunchAgents/
+    3. launchctl load ~/Library/LaunchAgents/com.airflow.dispatcher.plist
+  The Next.js API server must be running (npm run start) for the dispatcher to
+  reach http://localhost:3000. Set DISPATCHER_TOKEN in the environment/.env.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.airflow.dispatcher</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd /Users/YOURNAME/airflow &amp;&amp; node dispatcher/run.js &gt;&gt; logs/dispatcher.log 2&gt;&amp;1</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>7</integer>
+    <key>Minute</key><integer>30</integer>
+  </dict>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>
