@@ -95,21 +95,31 @@ pub struct ScheduleJob {
     pub last_result: Option<String>,
 }
 
-/// §14.4 タスクカード JSON スキーマ。
+/// AirFlow完全版 §4.3: Markdown/YAML と GUI JSON ビューの共通 TaskCard。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskCard {
+    pub id: String,
     pub task_id: String,
     pub title: String,
-    pub assignee: String,
+    pub category: String,
     pub status: String,
-    pub priority: String,
+    pub priority: u8,
+    pub assignee: String,
     pub risk_score: f32,
+    pub created: String,
+    pub updated: String,
+    pub due: Option<String>,
+    pub source: String,
+    pub tier: u8,
+    pub decision_required: bool,
     pub dependencies: Vec<String>,
-    pub last_updated: String,
+    pub links: Vec<String>,
+    pub log: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
+    pub airflow_store_path: String,
     pub vault_path: String,
     pub repos_parent: String,
     pub scripts_path: String,
@@ -120,6 +130,7 @@ pub struct AppSettings {
     pub default_model: String,
     /// 退避モード（§4.7）。ON時は全実行を local_review へ。
     pub retreat_mode: bool,
-    /// 課金事故防止: 環境に OPENAI_API_KEY があるか（§9）。
+    /// 課金事故防止: 従量課金系APIキーがあるか（§9）。
     pub openai_api_key_present: bool,
+    pub detected_api_keys: Vec<String>,
 }

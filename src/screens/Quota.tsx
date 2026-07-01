@@ -14,8 +14,9 @@ export function Quota() {
   const requestApproval = useCockpit((s) => s.requestApproval);
   const pushToast = useCockpit((s) => s.pushToast);
 
-  // §9: 環境に OPENAI_API_KEY があれば赤旗（課金事故防止）。auth.method=api でも検出。
+  // §9: 従量課金系APIキーがあれば赤旗（課金事故防止）。auth.method=api でも検出。
   const apiKeyFlag = (settings?.openai_api_key_present ?? false) || auth?.method === "api";
+  const detectedKeys = settings?.detected_api_keys ?? (apiKeyFlag ? ["OPENAI_API_KEY"] : []);
 
   const setModel = (model: string) =>
     // 既定モデル切替は要確認（§4.7, §9）。~/.codex/config.toml を編集。
@@ -65,12 +66,12 @@ export function Quota() {
               <div className="flex items-center gap-2">
                 <span className={apiKeyFlag ? "text-down" : "text-ok"}>{apiKeyFlag ? "🚩" : "✓"}</span>
                 <span className="text-sm font-medium">
-                  {apiKeyFlag ? "OPENAI_API_KEY を検出" : "API キー未検出"}
+                  {apiKeyFlag ? "従量課金系 API キーを検出" : "API キー未検出"}
                 </span>
               </div>
               <p className="mt-1 text-xs text-muted">
                 {apiKeyFlag
-                  ? "課金事故防止のため unset を推奨: `unset OPENAI_API_KEY`"
+                  ? `課金事故防止のため環境から外してください: ${detectedKeys.join(", ")}`
                   : "課金につながる API 経路は検出されていません。"}
               </p>
             </div>

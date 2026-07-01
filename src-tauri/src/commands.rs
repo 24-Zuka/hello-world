@@ -46,6 +46,11 @@ pub fn quota_status(state: State<'_, Cockpit>) -> Result<Quota, String> {
     core::commands::quota_status(state.inner())
 }
 
+#[tauri::command]
+pub fn task_list(state: State<'_, Cockpit>) -> Result<Vec<TaskCard>, String> {
+    core::commands::task_list(state.inner())
+}
+
 // ── MCP ─────────────────────────────────────────────────────────────────────
 
 #[tauri::command]

@@ -19,28 +19,28 @@ export function Sidebar() {
   const togglePalette = useCockpit((s) => s.togglePalette);
 
   return (
-    <nav className="flex w-56 flex-col border-r border-base-700 bg-base-900">
-      <div className="px-5 py-5">
-        <div className="text-lg font-semibold tracking-wide text-accent">JARVIS</div>
-        <div className="text-xs uppercase tracking-[0.2em] text-muted">Cockpit</div>
+    <nav className="flex shrink-0 flex-col border-b border-base-700 bg-base-900 md:w-[236px] md:border-b-0 md:border-r">
+      <div className="flex items-end justify-between px-4 py-3 md:block md:px-5 md:py-5">
+        <div className="font-display text-xl font-bold tracking-normal text-accent">AirFlow</div>
+        <div className="text-[11px] uppercase tracking-[0.2em] text-muted">JARVIS Cockpit</div>
       </div>
-      <ul className="flex-1 space-y-0.5 px-2">
+      <ul className="flex gap-1 overflow-x-auto px-2 pb-2 md:block md:flex-1 md:space-y-0.5 md:overflow-visible md:pb-0">
         {NAV.map((n) => {
           const active = screen === n.id;
           return (
-            <li key={n.id}>
+            <li key={n.id} className="shrink-0 md:shrink">
               <button
                 onClick={() => setScreen(n.id)}
                 aria-current={active ? "page" : undefined}
-                className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+                className={`flex h-10 min-w-[128px] items-center gap-2 rounded-lg px-3 text-left text-[13px] transition-colors md:w-full md:min-w-0 md:gap-3 ${
                   active
-                    ? "bg-base-700 text-white"
-                    : "text-muted hover:bg-base-800 hover:text-white"
+                    ? "border border-accent-border bg-accent-dim text-text1"
+                    : "border border-transparent text-text2 hover:border-base-700 hover:bg-base-800 hover:text-text1"
                 }`}
               >
                 <span className="w-4 text-center text-accent">{n.icon}</span>
                 <span className="flex-1">{n.label}</span>
-                <span className="text-[10px] text-base-500">{n.jp}</span>
+                <span className="hidden text-[10px] text-base-500 md:inline">{n.jp}</span>
               </button>
             </li>
           );
@@ -48,7 +48,7 @@ export function Sidebar() {
       </ul>
       <button
         onClick={() => togglePalette(true)}
-        className="m-2 rounded-md border border-base-700 px-3 py-2 text-xs text-muted hover:text-white"
+        className="mx-2 mb-2 hidden rounded-lg border border-base-700 px-3 py-2 text-xs text-muted hover:border-accent-border hover:text-text1 md:block"
       >
         ⌘K コマンドパレット
       </button>

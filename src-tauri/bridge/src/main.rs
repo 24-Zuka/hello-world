@@ -183,6 +183,7 @@ async fn dispatch(st: &AppState, cmd: &str, a: &Value) -> Result<Value, String> 
         "codex_auth_status" => to_v(core::commands::codex_auth_status()?)?,
         "codex_login" => to_v(core::commands::codex_login(st.sink()).await?)?,
         "quota_status" => to_v(core::commands::quota_status(cx)?)?,
+        "task_list" => to_v(core::commands::task_list(cx)?)?,
 
         "mcp_list" => to_v(core::commands::mcp_list()?)?,
         "mcp_toggle" => {

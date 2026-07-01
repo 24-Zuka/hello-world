@@ -37,6 +37,7 @@ pub fn run() {
             commands::codex_auth_status,
             commands::codex_login,
             commands::quota_status,
+            commands::task_list,
             commands::mcp_list,
             commands::mcp_toggle,
             commands::worktree_list,

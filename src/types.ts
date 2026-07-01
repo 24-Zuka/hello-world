@@ -75,19 +75,33 @@ export interface ScheduleJob {
   last_result?: string | null;
 }
 
-// §14.4 タスクカード JSON スキーマ。
+export type AirFlowStatus = "Inbox" | "Today" | "Doing" | "Waiting" | "Done";
+export type AirFlowCategory = "Business" | "Engineering" | "Content";
+export type AirFlowAssignee = "codex" | "lmstudio" | "gemini" | "human";
+
+// AirFlow完全版 §4.3: Markdown/YAML と GUI JSON ビューの共通 TaskCard。
 export interface TaskCard {
+  id: string;
   task_id: string;
   title: string;
-  assignee: string;
-  status: "TODO" | "IN_PROGRESS" | "AWAITING_DECISION" | "PENDING_REVIEW" | "DONE";
-  priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  category: AirFlowCategory;
+  status: AirFlowStatus;
+  priority: 1 | 2 | 3;
   risk_score: number;
+  created: string;
+  updated: string;
+  due?: string | null;
+  source: "email" | "manual" | "obsidian-inbox" | "ai";
+  assignee: AirFlowAssignee;
+  tier: 1 | 2 | 3;
+  decision_required: boolean;
   dependencies: string[];
-  last_updated: string;
+  links: string[];
+  log: string[];
 }
 
 export interface AppSettings {
+  airflow_store_path: string;
   vault_path: string;
   repos_parent: string;
   scripts_path: string;
@@ -97,6 +111,7 @@ export interface AppSettings {
   default_model: string;
   retreat_mode: boolean;
   openai_api_key_present: boolean;
+  detected_api_keys: string[];
 }
 
 // 承認モーダル（§5, §14.3）。risk_score>=3.0 か §9 権限表で必須。

@@ -11,8 +11,15 @@ pub struct Cockpit {
 impl Cockpit {
     pub fn new() -> Self {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+        let airflow_store_path = format!("{home}/Library/Application Support/AirFlow");
+        let detected_api_keys = ["OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"]
+            .iter()
+            .filter(|name| std::env::var(name).ok().filter(|v| !v.is_empty()).is_some())
+            .map(|name| (*name).to_string())
+            .collect::<Vec<_>>();
         Self {
             settings: Mutex::new(AppSettings {
+                airflow_store_path,
                 vault_path: format!("{home}/Obsidian/Vault"),
                 repos_parent: format!("{home}/dev"),
                 scripts_path: format!("{home}/.codex/scripts"),
@@ -21,11 +28,8 @@ impl Cockpit {
                 obsidian_endpoint: "http://127.0.0.1:27123".into(),
                 default_model: "gpt-5.4-mini".into(),
                 retreat_mode: false,
-                // §9: 環境に OPENAI_API_KEY があれば赤旗。起動時に検出。
-                openai_api_key_present: std::env::var("OPENAI_API_KEY")
-                    .ok()
-                    .filter(|v| !v.is_empty())
-                    .is_some(),
+                openai_api_key_present: !detected_api_keys.is_empty(),
+                detected_api_keys,
             }),
         }
     }

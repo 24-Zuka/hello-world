@@ -9,8 +9,8 @@ export function HealthBar() {
   const setScreen = useCockpit((s) => s.setScreen);
 
   return (
-    <div className="flex items-center gap-6 border-b border-base-700 bg-base-850 px-5 py-2.5">
-      <span className="text-xs font-semibold uppercase tracking-wider text-muted">Health</span>
+    <div className="flex min-h-[42px] items-center gap-3 overflow-x-auto border-b border-base-700 bg-base-850 px-4 py-2 md:gap-5 md:px-5">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">Health</span>
       <StatusDot status={health?.codex ?? "unknown"} label="Codex (ChatGPT)" />
       <StatusDot status={health?.lmstudio ?? "unknown"} label="LM Studio" />
       <StatusDot status={health?.obsidian ?? "unknown"} label="Obsidian" />

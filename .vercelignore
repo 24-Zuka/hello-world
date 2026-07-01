@@ -1,0 +1,9 @@
+src-tauri/target
+src-tauri/gen
+node_modules
+dist
+.codex-screens
+.git
+.env
+.env.*
+*.log

@@ -9,6 +9,7 @@ import type {
   Quota,
   ScheduleJob,
   SearchHit,
+  TaskCard,
   VaultNode,
   Worktree,
 } from "../types";
@@ -40,6 +41,7 @@ export const api = {
   codexAuthStatus: () => call<AuthStatus>("codex_auth_status"),
   codexLogin: () => call<string>("codex_login"),
   quotaStatus: () => call<Quota>("quota_status"),
+  taskList: () => call<TaskCard[]>("task_list"),
 
   mcpList: () => call<McpServer[]>("mcp_list"),
   mcpToggle: (name: string, enabled: boolean) => call<void>("mcp_toggle", { name, enabled }),

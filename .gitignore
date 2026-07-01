@@ -13,3 +13,6 @@ src-tauri/gen/
 .idea/
 .vscode/
 *.log
+.codex-screens/
+.vercel
+.env*

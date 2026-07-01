@@ -12,7 +12,7 @@ export function QuotaGauge({ quota, size = 140 }: { quota: Quota | null; size?: 
   const c = 2 * Math.PI * r;
   const dash = unknown ? 0 : (pct / 100) * c;
 
-  const color = unknown ? "#8A94A6" : pct >= 80 ? "#FBBF24" : pct >= 95 ? "#F87171" : "#3FB5B0";
+  const color = unknown ? "#5D6B7B" : pct >= 95 ? "#F26D6D" : pct >= 80 ? "#F2C14E" : "#4EA1FF";
 
   return (
     <div className="flex flex-col items-center">
@@ -34,12 +34,12 @@ export function QuotaGauge({ quota, size = 140 }: { quota: Quota | null; size?: 
       <div className="-mt-[88px] flex flex-col items-center" style={{ width: size }}>
         {unknown ? (
           <>
-            <span className="text-2xl font-semibold text-muted">不明</span>
+            <span className="font-display text-2xl font-bold text-muted">不明</span>
             <span className="text-[10px] text-base-500">公式API無し (§12)</span>
           </>
         ) : (
           <>
-            <span className="text-3xl font-semibold" style={{ color }}>
+            <span className="font-display text-3xl font-bold" style={{ color }}>
               {pct}%
             </span>
             <span className="text-[10px] text-muted">5h ウィンドウ</span>

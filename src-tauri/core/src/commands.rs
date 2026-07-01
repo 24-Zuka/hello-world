@@ -15,6 +15,7 @@ use crate::models::*;
 use crate::obsidian::Obsidian;
 use crate::secrets;
 use crate::state::Cockpit;
+use crate::store;
 
 // ── ヘルス / 認証 / クォータ ────────────────────────────────────────────────
 
@@ -56,14 +57,16 @@ pub async fn health_check(state: &Cockpit) -> Result<Health, String> {
 
 /// 認証経路（§4.7）。ChatGPTログインか、APIキー検出か。
 pub fn codex_auth_status() -> Result<AuthStatus, String> {
-    // OPENAI_API_KEY があれば api 経路として警告対象（赤旗は Quota 画面で表示）。
-    let api_key = std::env::var("OPENAI_API_KEY").ok().filter(|v| !v.is_empty());
+    // 従量課金系APIキーがあれば警告対象（赤旗は Quota 画面で表示）。
+    let api_key = ["OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"]
+        .iter()
+        .any(|name| std::env::var(name).ok().filter(|v| !v.is_empty()).is_some());
     match run_capture(&svec(&["codex", "login", "status"]), None) {
         Ok(out) if out.to_lowercase().contains("logged in") => Ok(AuthStatus {
             logged_in: true,
             method: AuthMethod::Chatgpt,
         }),
-        _ if api_key.is_some() => Ok(AuthStatus {
+        _ if api_key => Ok(AuthStatus {
             logged_in: true,
             method: AuthMethod::Api,
         }),
@@ -88,6 +91,15 @@ pub fn quota_status(_state: &Cockpit) -> Result<Quota, String> {
     // `codex` セッションの `/status` 出力をパースする想定。非対話では取得困難なため、
     // 現状は unknown を正直に返す（誤った安心を与えない）。Mac実機でパーサを差し込む。
     Ok(mock::quota_unknown())
+}
+
+/// AirFlow動的タスク（§4.2/§4.3）。正データはMarkdownだが、GUIはJSONビューで読む。
+/// Store未接続・空の場合だけMockへ縮退する。
+pub fn task_list(state: &Cockpit) -> Result<Vec<TaskCard>, String> {
+    match store::read_tickets(&state.settings().airflow_store_path) {
+        Ok(tasks) if !tasks.is_empty() => Ok(tasks),
+        _ => Ok(mock::task_cards()),
+    }
 }
 
 // ── MCP ─────────────────────────────────────────────────────────────────────
@@ -292,6 +304,7 @@ pub fn settings_get(state: &Cockpit) -> Result<AppSettings, String> {
 
 pub fn settings_set(state: &Cockpit, patch: serde_json::Value) -> Result<AppSettings, String> {
     state.update(|s| {
+        if let Some(v) = patch.get("airflow_store_path").and_then(|v| v.as_str()) { s.airflow_store_path = v.into(); }
         if let Some(v) = patch.get("vault_path").and_then(|v| v.as_str()) { s.vault_path = v.into(); }
         if let Some(v) = patch.get("repos_parent").and_then(|v| v.as_str()) { s.repos_parent = v.into(); }
         if let Some(v) = patch.get("scripts_path").and_then(|v| v.as_str()) { s.scripts_path = v.into(); }

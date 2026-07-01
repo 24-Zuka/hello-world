@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -15,9 +17,25 @@ body,
 
 body {
   background-color: #0e1116;
-  color: #e6e9ef;
+  color: #e6edf3;
   font-family: theme("fontFamily.sans");
+  font-size: 14px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #4ea1ff;
+  outline-offset: 2px;
 }
 
 /* ログ/差分の等幅（§6） */
@@ -37,5 +55,5 @@ body {
 
 /* スクロールバー控えめ */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #2a323e; border-radius: 6px; }
+::-webkit-scrollbar-thumb { background: #242d3a; border-radius: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

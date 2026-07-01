@@ -13,6 +13,7 @@ pub mod models;
 pub mod obsidian;
 pub mod secrets;
 pub mod state;
+pub mod store;
 
 pub use exec::EventSink;
 pub use state::Cockpit;

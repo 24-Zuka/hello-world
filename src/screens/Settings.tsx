@@ -15,6 +15,7 @@ export function Settings() {
   const [vaultPath, setVaultPath] = useState("");
   const [scriptsPath, setScriptsPath] = useState("");
   const [reposParent, setReposParent] = useState("");
+  const [workspaceRoot, setWorkspaceRoot] = useState("");
   const [lmEndpoint, setLmEndpoint] = useState("");
   const [obsToken, setObsToken] = useState("");
   const [mcp, setMcp] = useState<McpServer[]>([]);
@@ -56,6 +57,7 @@ export function Settings() {
       setVaultPath(settings.vault_path);
       setScriptsPath(settings.scripts_path);
       setReposParent(settings.repos_parent);
+      setWorkspaceRoot(settings.workspace_root);
       setLmEndpoint(settings.lmstudio_endpoint);
     }
     api.mcpList().then(setMcp).catch(() => setMcp([]));
@@ -66,6 +68,7 @@ export function Settings() {
       vault_path: vaultPath,
       scripts_path: scriptsPath,
       repos_parent: reposParent,
+      workspace_root: workspaceRoot,
       lmstudio_endpoint: lmEndpoint,
     });
     pushToast({ level: "info", title: "保存", body: "設定を更新しました。" });
@@ -137,6 +140,7 @@ export function Settings() {
           <Field label="Vault" value={vaultPath} onChange={setVaultPath} />
           <Field label="リポジトリ親" value={reposParent} onChange={setReposParent} />
           <Field label="scripts" value={scriptsPath} onChange={setScriptsPath} />
+          <Field label="workspace root" value={workspaceRoot} onChange={setWorkspaceRoot} />
           <div className="mt-3">
             <Button variant="primary" onClick={savePaths}>
               保存

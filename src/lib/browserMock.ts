@@ -10,6 +10,7 @@ import type {
   Quota,
   ScheduleJob,
   SearchHit,
+  TaskCard,
   VaultNode,
   Worktree,
 } from "../types";
@@ -30,6 +31,7 @@ function emit(event: string, payload: unknown) {
 
 // ── モック状態 ───────────────────────────────────────────────────────────────
 let settings: AppSettings = {
+  airflow_store_path: "/Users/kai/Library/Application Support/AirFlow",
   vault_path: "/Users/kai/Obsidian/Vault",
   repos_parent: "/Users/kai/dev",
   scripts_path: "/Users/kai/.codex/scripts",
@@ -40,6 +42,7 @@ let settings: AppSettings = {
   retreat_mode: false,
   // デモでは未設定（赤旗オフ）。Quota 画面のロジック確認は store 側トグルで。
   openai_api_key_present: false,
+  detected_api_keys: [],
 };
 
 let jobSeq = 1;
@@ -110,6 +113,66 @@ APIキー入力欄を一切持たない方針を確定（§0.2）。
   "MEMORY.md": "# MEMORY\n\n共有記憶のルート。書き物文化の中心。\n",
 };
 
+const TASKS: TaskCard[] = [
+  {
+    id: "TKT-20260701-001",
+    task_id: "TASK-2026-0701A",
+    title: "AirFlow完全版仕様書をアプリ実装へ反映する",
+    category: "Engineering",
+    status: "Doing",
+    priority: 1,
+    risk_score: 2.4,
+    created: "2026-07-01T09:00:00+09:00",
+    updated: "2026-07-01T13:30:00+09:00",
+    due: "2026-07-01",
+    source: "manual",
+    assignee: "codex",
+    tier: 3,
+    decision_required: false,
+    dependencies: [],
+    links: ["[[01_Projects/AirFlow AI自動化タスクボード 完全版仕様書]]"],
+    log: ["Design Spec v1.0 をUIトークンへ反映中"],
+  },
+  {
+    id: "TKT-20260701-002",
+    task_id: "TASK-2026-0701B",
+    title: "OPENAI/GEMINI APIキー検出時の赤旗を確認する",
+    category: "Business",
+    status: "Waiting",
+    priority: 1,
+    risk_score: 3.2,
+    created: "2026-07-01T09:30:00+09:00",
+    updated: "2026-07-01T12:10:00+09:00",
+    due: "2026-07-01",
+    source: "ai",
+    assignee: "human",
+    tier: 2,
+    decision_required: true,
+    dependencies: ["TASK-2026-0701A"],
+    links: ["[[04_Context/AI秘書システム]]"],
+    log: ["risk_score >= 3.0 のため承認モーダル対象"],
+  },
+  {
+    id: "TKT-20260701-003",
+    task_id: "TASK-2026-0701C",
+    title: "明朝の朝礼レポートに要判断を集約する",
+    category: "Content",
+    status: "Today",
+    priority: 2,
+    risk_score: 1.4,
+    created: "2026-07-01T10:00:00+09:00",
+    updated: "2026-07-01T10:00:00+09:00",
+    due: "2026-07-02",
+    source: "obsidian-inbox",
+    assignee: "lmstudio",
+    tier: 2,
+    decision_required: false,
+    dependencies: [],
+    links: ["[[90_Daily/AirFlow_2026-06-29_朝礼]]"],
+    log: ["LM Studioで分類済み"],
+  },
+];
+
 // ── invoke ハンドラ ──────────────────────────────────────────────────────────
 export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const a = args ?? {};
@@ -128,6 +191,8 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
       // §12: デモは「不明」を正直に返す（誤った安心を与えない）。
       return r({ window_used: 0, window_limit: 0, resets_at: null, weekly: null,
         source: "unknown" } as Quota);
+    case "task_list":
+      return r(TASKS);
     case "mcp_list":
       return r([
         { name: "obsidian", enabled: true, transport: "stdio" },
