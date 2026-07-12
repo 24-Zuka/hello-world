@@ -22,7 +22,8 @@ pub fn run() {
                 loop {
                     ticker.tick().await;
                     let state = handle.state::<Cockpit>();
-                    if let Ok(h) = jarvis_cockpit_core::commands::health_check(state.inner()).await {
+                    if let Ok(h) = jarvis_cockpit_core::commands::health_check(state.inner()).await
+                    {
                         let _ = handle.emit("health:tick", h);
                     }
                     if let Ok(q) = jarvis_cockpit_core::commands::quota_status(state.inner()) {
@@ -38,6 +39,31 @@ pub fn run() {
             commands::codex_login,
             commands::quota_status,
             commands::task_list,
+            commands::task_get,
+            commands::task_create,
+            commands::task_update,
+            commands::task_import,
+            commands::task_archive,
+            commands::task_route_preview,
+            commands::task_enqueue,
+            commands::task_run_now,
+            commands::task_cancel,
+            commands::task_retry,
+            commands::task_approve,
+            commands::task_reject,
+            commands::task_feedback,
+            commands::task_artifacts,
+            commands::task_artifact_read,
+            commands::task_artifact_open,
+            commands::orchestrator_status,
+            commands::orchestrator_start,
+            commands::orchestrator_pause,
+            commands::orchestrator_resume,
+            commands::orchestrator_stop,
+            commands::orchestrator_run_once,
+            commands::worker_health,
+            commands::model_capabilities,
+            commands::model_refresh,
             commands::mcp_list,
             commands::mcp_toggle,
             commands::worktree_list,

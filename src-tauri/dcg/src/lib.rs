@@ -55,9 +55,11 @@ pub fn inspect(argv: &[String]) -> Verdict {
     // ① Quick Reject: 危険キーワードが実効トークンに無ければ即通過。
     let joined = effective.join(" ");
     let lower = joined.to_lowercase();
-    let suspicious = ["rm", "reset", "push", "dd", "mkfs", "fdisk", "--force", "-rf"]
-        .iter()
-        .any(|k| lower.contains(k));
+    let suspicious = [
+        "rm", "reset", "push", "dd", "mkfs", "fdisk", "--force", "-rf",
+    ]
+    .iter()
+    .any(|k| lower.contains(k));
     if !suspicious {
         return Verdict::Allow;
     }
@@ -142,9 +144,7 @@ fn rule_git(exe: &str, tokens: &[String]) -> Option<Verdict> {
         // --force-with-lease は比較的安全なので対象外。
         let lease = tokens.iter().any(|t| t.starts_with("--force-with-lease"));
         if forced && !lease {
-            let targets_protected = tokens
-                .iter()
-                .any(|t| t == "main" || t == "master")
+            let targets_protected = tokens.iter().any(|t| t == "main" || t == "master")
                 || !tokens.iter().any(|t| t == "main" || t == "master"); // 明示ブランチ無し=現在ブランチがmainの可能性
             if targets_protected {
                 return Some(Verdict::Blocked {
@@ -257,14 +257,26 @@ mod tests {
     // §14.7: --force-with-lease は許可。
     #[test]
     fn allows_force_with_lease() {
-        assert!(!inspect(&argv(&["git", "push", "--force-with-lease", "origin", "feature"])).is_blocked());
+        assert!(!inspect(&argv(&[
+            "git",
+            "push",
+            "--force-with-lease",
+            "origin",
+            "feature"
+        ]))
+        .is_blocked());
     }
 
     // §14.7: コミットメッセージ内の "rm -rf" は誤遮断しない（False Positive ゼロ）。
     #[test]
     fn no_false_positive_in_commit_message() {
         assert!(!inspect(&argv(&["git", "commit", "-m", "remove rm -rf from docs"])).is_blocked());
-        assert!(!inspect(&argv(&["git", "commit", "--message=cleanup rm -rf example"])).is_blocked());
+        assert!(!inspect(&argv(&[
+            "git",
+            "commit",
+            "--message=cleanup rm -rf example"
+        ]))
+        .is_blocked());
     }
 
     // 物理デバイス操作はハードブロック。

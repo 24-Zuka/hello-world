@@ -29,8 +29,18 @@ pub fn read_tickets(store_path: &str) -> Result<Vec<TaskCard>, String> {
         }
     }
     tasks.sort_by(|a, b| {
-        let ak = (status_rank(&a.status), a.priority, a.due.clone().unwrap_or_default(), a.updated.clone());
-        let bk = (status_rank(&b.status), b.priority, b.due.clone().unwrap_or_default(), b.updated.clone());
+        let ak = (
+            status_rank(&a.legacy_status),
+            a.priority,
+            a.due.clone().unwrap_or_default(),
+            a.updated.clone(),
+        );
+        let bk = (
+            status_rank(&b.legacy_status),
+            b.priority,
+            b.due.clone().unwrap_or_default(),
+            b.updated.clone(),
+        );
         ak.cmp(&bk)
     });
     Ok(tasks)
@@ -42,29 +52,58 @@ fn parse_ticket(path: &Path, raw: &str) -> Option<TaskCard> {
     let stem = file_stem(path);
     let id = str_field(&map, "id").unwrap_or_else(|| stem.clone());
     let task_id = str_field(&map, "task_id").unwrap_or_else(|| id.clone());
+    let legacy_status = normalize_status(str_field(&map, "status").as_deref());
+    let automation_status = match legacy_status.as_str() {
+        "Today" => crate::models::TaskStatus::Ready,
+        "Doing" => crate::models::TaskStatus::Running,
+        "Waiting" => crate::models::TaskStatus::AwaitingApproval,
+        "Done" => crate::models::TaskStatus::Completed,
+        _ => crate::models::TaskStatus::Draft,
+    };
+    let priority = normalize_priority(str_field(&map, "priority").as_deref());
+    let created = str_field(&map, "created").unwrap_or_default();
+    let updated = str_field(&map, "updated").unwrap_or_default();
+    let decision_required = bool_field(&map, "decision_required");
     Some(TaskCard {
         id,
         task_id,
         title: str_field(&map, "title").unwrap_or_else(|| first_heading(raw).unwrap_or(stem)),
         category: normalize_category(str_field(&map, "category").as_deref()),
-        status: normalize_status(str_field(&map, "status").as_deref()),
-        priority: normalize_priority(str_field(&map, "priority").as_deref()),
+        legacy_status,
+        priority,
         assignee: normalize_assignee(str_field(&map, "assignee").as_deref()),
-        risk_score: str_field(&map, "risk_score").and_then(|v| v.parse().ok()).unwrap_or(1.0),
-        created: str_field(&map, "created").unwrap_or_default(),
-        updated: str_field(&map, "updated").unwrap_or_default(),
+        risk_score: str_field(&map, "risk_score")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1.0),
+        created: created.clone(),
+        updated: updated.clone(),
         due: str_field(&map, "due").filter(|v| !v.is_empty()),
         source: str_field(&map, "source").unwrap_or_else(|| "manual".into()),
-        tier: str_field(&map, "tier").and_then(|v| v.parse().ok()).filter(|v| (1..=3).contains(v)).unwrap_or(1),
-        decision_required: bool_field(&map, "decision_required"),
+        tier: str_field(&map, "tier")
+            .and_then(|v| v.parse().ok())
+            .filter(|v| (1..=3).contains(v))
+            .unwrap_or(1),
+        decision_required,
         dependencies: list_field(&map, "dependencies"),
         links: list_field(&map, "links"),
         log: list_field(&map, "log"),
+        status: automation_status,
+        task_priority: match priority {
+            1 => crate::models::TaskPriority::High,
+            3 => crate::models::TaskPriority::Low,
+            _ => crate::models::TaskPriority::Medium,
+        },
+        requires_human_approval: decision_required,
+        created_at: created,
+        last_updated: updated,
+        ..TaskCard::default()
     })
 }
 
 fn extract_frontmatter(raw: &str) -> Option<&str> {
-    let rest = raw.strip_prefix("---\n").or_else(|| raw.strip_prefix("---\r\n"))?;
+    let rest = raw
+        .strip_prefix("---\n")
+        .or_else(|| raw.strip_prefix("---\r\n"))?;
     let end = rest.find("\n---").or_else(|| rest.find("\r\n---"))?;
     Some(&rest[..end])
 }
@@ -116,15 +155,25 @@ fn list_field(map: &HashMap<String, Vec<String>>, key: &str) -> Vec<String> {
 }
 
 fn bool_field(map: &HashMap<String, Vec<String>>, key: &str) -> bool {
-    matches!(str_field(map, key).as_deref(), Some("true" | "True" | "TRUE" | "yes" | "1"))
+    matches!(
+        str_field(map, key).as_deref(),
+        Some("true" | "True" | "TRUE" | "yes" | "1")
+    )
 }
 
 fn clean_scalar(value: &str) -> String {
-    value.trim().trim_matches('"').trim_matches('\'').to_string()
+    value
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .to_string()
 }
 
 fn file_stem(path: &Path) -> String {
-    path.file_stem().and_then(|s| s.to_str()).unwrap_or("untitled").to_string()
+    path.file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("untitled")
+        .to_string()
 }
 
 fn first_heading(raw: &str) -> Option<String> {
@@ -213,7 +262,8 @@ log:
 "#;
         let task = parse_ticket(&PathBuf::from("ticket.md"), raw).unwrap();
         assert_eq!(task.id, "TKT-20260701-001");
-        assert_eq!(task.status, "Waiting");
+        assert_eq!(task.legacy_status, "Waiting");
+        assert_eq!(task.status, crate::models::TaskStatus::AwaitingApproval);
         assert_eq!(task.priority, 1);
         assert!(task.decision_required);
         assert_eq!(task.dependencies, vec!["TASK-2026-0701B"]);

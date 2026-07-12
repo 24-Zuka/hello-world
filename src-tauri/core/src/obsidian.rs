@@ -19,7 +19,11 @@ impl Obsidian {
     }
 
     fn req(&self, method: reqwest::Method, path: &str) -> reqwest::RequestBuilder {
-        let url = format!("{}/{}", self.base.trim_end_matches('/'), path.trim_start_matches('/'));
+        let url = format!(
+            "{}/{}",
+            self.base.trim_end_matches('/'),
+            path.trim_start_matches('/')
+        );
         let mut rb = self.http.request(method, url);
         if let Some(t) = &self.token {
             rb = rb.bearer_auth(t);
@@ -29,6 +33,7 @@ impl Obsidian {
 
     /// GET /vault/<path> — ノート本文。
     pub async fn read(&self, path: &str) -> Result<String, String> {
+        validate_vault_path(path)?;
         self.req(reqwest::Method::GET, &format!("vault/{path}"))
             .send()
             .await
@@ -40,6 +45,7 @@ impl Obsidian {
 
     /// PUT /vault/<path> — 全置換。
     pub async fn write_replace(&self, path: &str, content: String) -> Result<(), String> {
+        validate_vault_path(path)?;
         self.req(reqwest::Method::PUT, &format!("vault/{path}"))
             .header("Content-Type", "text/markdown")
             .body(content)
@@ -50,7 +56,13 @@ impl Obsidian {
     }
 
     /// PATCH /vault/<path> — heading 単位の外科的追記（§4.4, §14.4 アンカー保全）。
-    pub async fn write_append(&self, path: &str, content: String, heading: &str) -> Result<(), String> {
+    pub async fn write_append(
+        &self,
+        path: &str,
+        content: String,
+        heading: &str,
+    ) -> Result<(), String> {
+        validate_vault_path(path)?;
         self.req(reqwest::Method::PATCH, &format!("vault/{path}"))
             .header("Content-Type", "text/markdown")
             .header("Operation", "append")
@@ -65,6 +77,7 @@ impl Obsidian {
 
     /// DELETE /vault/<path> — §9 の承認後のみ呼ばれる。
     pub async fn delete(&self, path: &str) -> Result<(), String> {
+        validate_vault_path(path)?;
         self.req(reqwest::Method::DELETE, &format!("vault/{path}"))
             .send()
             .await
@@ -139,5 +152,28 @@ impl Obsidian {
             .await
             .map(|r| r.status().is_success() || r.status().as_u16() == 401)
             .unwrap_or(false)
+    }
+}
+
+fn validate_vault_path(path: &str) -> Result<(), String> {
+    if path.is_empty()
+        || path.len() > 1024
+        || path.starts_with('/')
+        || path.split('/').any(|part| matches!(part, "" | "." | ".."))
+        || path.contains('\0')
+    {
+        return Err("invalid vault path".into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_vault_path_traversal() {
+        assert!(validate_vault_path("../secret.md").is_err());
+        assert!(validate_vault_path("safe/note.md").is_ok());
     }
 }

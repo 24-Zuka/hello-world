@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use axum::{
     body::{Body, Bytes},
-    extract::{Path, Query, Request, State},
+    extract::{DefaultBodyLimit, Path, Query, Request, State},
     http::{header, HeaderMap, HeaderValue, Method, StatusCode},
     middleware::{self, Next},
     response::{
@@ -43,7 +43,9 @@ struct BridgeSink(broadcast::Sender<String>);
 impl EventSink for BridgeSink {
     fn emit(&self, event: &str, payload: Value) {
         // 1 行 = 1 イベント（{event, payload}）。購読者ゼロでも send のエラーは無視。
-        let _ = self.0.send(json!({ "event": event, "payload": payload }).to_string());
+        let _ = self
+            .0
+            .send(json!({ "event": event, "payload": payload }).to_string());
     }
 }
 
@@ -67,10 +69,21 @@ async fn main() {
         .ok()
         .filter(|s| !s.is_empty())
         .unwrap_or_else(gen_token);
+    let token_file = std::env::var("JARVIS_BRIDGE_TOKEN_FILE")
+        .ok()
+        .filter(|value| !value.is_empty());
+    if let Some(path) = &token_file {
+        write_token_file(path, &token).expect("write bridge token file");
+    }
     let addr = std::env::var("JARVIS_BRIDGE_ADDR").unwrap_or_else(|_| "127.0.0.1:8787".into());
     let origins: Vec<String> = std::env::var("JARVIS_BRIDGE_ORIGINS")
         .ok()
-        .map(|s| s.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect())
+        .map(|s| {
+            s.split(',')
+                .map(|x| x.trim().to_string())
+                .filter(|x| !x.is_empty())
+                .collect()
+        })
         .unwrap_or_else(default_origins);
 
     let (tx, _rx) = broadcast::channel::<String>(512);
@@ -80,6 +93,12 @@ async fn main() {
         token: Arc::new(token.clone()),
         origins: Arc::new(origins.clone()),
     };
+
+    if std::env::var("JARVIS_ORCHESTRATOR_AUTO_START").as_deref() == Ok("1") {
+        let mut settings = state.cockpit.settings();
+        settings.orchestrator_auto_start = true;
+        state.cockpit.orchestrator().start(settings, state.sink());
+    }
 
     // health:tick / quota:tick を 5 秒間隔で SSE 配信（§7.2）。
     {
@@ -107,6 +126,7 @@ async fn main() {
         .route("/health", get(health))
         .route("/invoke/:cmd", post(invoke))
         .route("/events", get(events))
+        .layer(DefaultBodyLimit::max(2 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(state.clone(), cors_mw))
         .with_state(state);
 
@@ -114,7 +134,11 @@ async fn main() {
     eprintln!("\n  JARVIS Bridge — 実連携の仲介サーバー");
     eprintln!("  ───────────────────────────────────────────");
     eprintln!("  Listening : http://{addr}");
-    eprintln!("  Token     : {token}");
+    if let Some(path) = &token_file {
+        eprintln!("  Token file: {path} (mode 0600)");
+    } else {
+        eprintln!("  Token     : {token}");
+    }
     eprintln!("  Origins   : {}", origins.join(", "));
     eprintln!("  使い方: 公開アプリの Settings →「ブリッジ接続」に URL とこの Token を貼り付け。");
     eprintln!("  （Token は本セッション限り。流出時は再起動で無効化されます）\n");
@@ -150,7 +174,9 @@ async fn events(
             Err(_) => None, // lagged: 取りこぼし行はスキップ
         }
     });
-    Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
+    Sse::new(stream)
+        .keep_alive(KeepAlive::default())
+        .into_response()
 }
 
 /// `POST /invoke/:cmd` — body=引数JSON。core::commands を呼び結果JSONを返す。
@@ -161,12 +187,25 @@ async fn invoke(
     body: Bytes,
 ) -> Response {
     if !check_token(&headers, &st, None) {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "unauthorized" }))).into_response();
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "unauthorized" })),
+        )
+            .into_response();
     }
     let args: Value = if body.is_empty() {
         json!({})
     } else {
-        serde_json::from_slice(&body).unwrap_or_else(|_| json!({}))
+        match serde_json::from_slice(&body) {
+            Ok(value) => value,
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error":"invalid JSON body"})),
+                )
+                    .into_response()
+            }
+        }
     };
     match dispatch(&st, &cmd, &args).await {
         Ok(v) => Json(v).into_response(),
@@ -184,6 +223,54 @@ async fn dispatch(st: &AppState, cmd: &str, a: &Value) -> Result<Value, String> 
         "codex_login" => to_v(core::commands::codex_login(st.sink()).await?)?,
         "quota_status" => to_v(core::commands::quota_status(cx)?)?,
         "task_list" => to_v(core::commands::task_list(cx)?)?,
+        "task_get" => to_v(core::commands::task_get(cx, s(a, "task_id")?)?)?,
+        "task_create" => to_v(core::commands::task_create(cx, from(a, "task")?)?)?,
+        "task_update" => to_v(core::commands::task_update(cx, from(a, "task")?)?)?,
+        "task_import" => to_v(core::commands::task_import(cx, s(a, "payload")?)?)?,
+        "task_archive" => to_v(core::commands::task_archive(cx, s(a, "task_id")?)?)?,
+        "task_route_preview" => to_v(core::commands::task_route_preview(cx, s(a, "task_id")?)?)?,
+        "task_enqueue" => to_v(core::commands::task_enqueue(cx, s(a, "task_id")?)?)?,
+        "task_run_now" => {
+            to_v(core::commands::task_run_now(st.sink(), cx, s(a, "task_id")?).await?)?
+        }
+        "task_cancel" => to_v(core::commands::task_cancel(cx, s(a, "task_id")?)?)?,
+        "task_retry" => to_v(core::commands::task_retry(cx, s(a, "task_id")?)?)?,
+        "task_approve" => to_v(core::commands::task_approve(
+            cx,
+            s(a, "task_id")?,
+            opt_s(a, "feedback"),
+        )?)?,
+        "task_reject" => to_v(core::commands::task_reject(
+            cx,
+            s(a, "task_id")?,
+            opt_s(a, "feedback"),
+        )?)?,
+        "task_feedback" => to_v(core::commands::task_feedback(
+            cx,
+            s(a, "task_id")?,
+            s(a, "feedback")?,
+        )?)?,
+        "task_artifacts" => to_v(core::commands::task_artifacts(cx, s(a, "task_id")?)?)?,
+        "task_artifact_read" => to_v(core::commands::task_artifact_read(
+            cx,
+            s(a, "task_id")?,
+            s(a, "path")?,
+        )?)?,
+        "task_artifact_open" => {
+            core::commands::task_artifact_open(cx, s(a, "task_id")?)?;
+            Value::Null
+        }
+        "orchestrator_status" => to_v(core::commands::orchestrator_status(cx)?)?,
+        "orchestrator_start" => to_v(core::commands::orchestrator_start(st.sink(), cx)?)?,
+        "orchestrator_pause" => to_v(core::commands::orchestrator_pause(cx)?)?,
+        "orchestrator_resume" => to_v(core::commands::orchestrator_resume(cx)?)?,
+        "orchestrator_stop" => to_v(core::commands::orchestrator_stop(cx)?)?,
+        "orchestrator_run_once" => {
+            to_v(core::commands::orchestrator_run_once(st.sink(), cx).await?)?
+        }
+        "worker_health" => to_v(core::commands::worker_health(cx).await?)?,
+        "model_capabilities" => to_v(core::commands::model_capabilities(cx).await?)?,
+        "model_refresh" => to_v(core::commands::model_refresh(cx).await?)?,
 
         "mcp_list" => to_v(core::commands::mcp_list()?)?,
         "mcp_toggle" => {
@@ -192,13 +279,24 @@ async fn dispatch(st: &AppState, cmd: &str, a: &Value) -> Result<Value, String> 
         }
 
         "worktree_list" => to_v(core::commands::worktree_list(cx, s(a, "repo")?)?)?,
-        "worktree_create" => to_v(core::commands::worktree_create(cx, s(a, "repo")?, s(a, "feature")?)?)?,
+        "worktree_create" => to_v(core::commands::worktree_create(
+            cx,
+            s(a, "repo")?,
+            s(a, "feature")?,
+        )?)?,
         "codex_build" => to_v(
-            core::commands::codex_build(st.sink(), cx, s(a, "worktree")?, s(a, "prompt")?, opt_s(a, "profile")).await?,
+            core::commands::codex_build(
+                st.sink(),
+                cx,
+                s(a, "worktree")?,
+                s(a, "prompt")?,
+                opt_s(a, "profile"),
+            )
+            .await?,
         )?,
-        "local_review" => {
-            to_v(core::commands::local_review(st.sink(), cx, s(a, "worktree")?, s(a, "base")?).await?)?
-        }
+        "local_review" => to_v(
+            core::commands::local_review(st.sink(), cx, s(a, "worktree")?, s(a, "base")?).await?,
+        )?,
         "git_diff" => to_v(core::commands::git_diff(s(a, "worktree")?, s(a, "base")?)?)?,
         "git_merge" => {
             core::commands::git_merge(s(a, "worktree")?, s(a, "base")?)?;
@@ -208,7 +306,14 @@ async fn dispatch(st: &AppState, cmd: &str, a: &Value) -> Result<Value, String> 
         "vault_tree" => to_v(core::commands::vault_tree(cx).await?)?,
         "vault_read" => to_v(core::commands::vault_read(cx, s(a, "path")?).await?)?,
         "vault_write" => {
-            core::commands::vault_write(cx, s(a, "path")?, s(a, "content")?, s(a, "mode")?, opt_s(a, "heading")).await?;
+            core::commands::vault_write(
+                cx,
+                s(a, "path")?,
+                s(a, "content")?,
+                s(a, "mode")?,
+                opt_s(a, "heading"),
+            )
+            .await?;
             Value::Null
         }
         "vault_delete" => {
@@ -222,13 +327,17 @@ async fn dispatch(st: &AppState, cmd: &str, a: &Value) -> Result<Value, String> 
             core::commands::launchd_toggle(s(a, "label")?, b(a, "on")?)?;
             Value::Null
         }
-        "launchd_run_now" => to_v(core::commands::launchd_run_now(st.sink(), cx, s(a, "label")?).await?)?,
+        "launchd_run_now" => {
+            to_v(core::commands::launchd_run_now(st.sink(), cx, s(a, "label")?).await?)?
+        }
         "launchd_set_time" => {
             core::commands::launchd_set_time(s(a, "label")?, u8n(a, "hour")?, u8n(a, "minute")?)?;
             Value::Null
         }
 
-        "research_scan" => to_v(core::commands::research_scan(st.sink(), cx, s(a, "topic")?).await?)?,
+        "research_scan" => {
+            to_v(core::commands::research_scan(st.sink(), cx, s(a, "topic")?).await?)?
+        }
 
         "config_get_model" => to_v(core::commands::config_get_model(cx)?)?,
         "config_set_model" => {
@@ -240,7 +349,10 @@ async fn dispatch(st: &AppState, cmd: &str, a: &Value) -> Result<Value, String> 
             Value::Null
         }
         "settings_get" => to_v(core::commands::settings_get(cx)?)?,
-        "settings_set" => to_v(core::commands::settings_set(cx, a.get("patch").cloned().unwrap_or(Value::Null))?)?,
+        "settings_set" => to_v(core::commands::settings_set(
+            cx,
+            a.get("patch").cloned().unwrap_or(Value::Null),
+        )?)?,
 
         other => return Err(format!("unknown command: {other}")),
     };
@@ -256,7 +368,17 @@ fn check_token(headers: &HeaderMap, st: &AppState, query_token: Option<&str>) ->
         .and_then(|s| s.strip_prefix("Bearer "))
         .map(|s| s.to_string());
     let provided = bearer.or_else(|| query_token.map(|s| s.to_string()));
-    matches!(provided, Some(p) if p == *st.token.as_ref())
+    provided.is_some_and(|p| constant_time_eq(p.as_bytes(), st.token.as_bytes()))
+}
+
+fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    left.iter()
+        .zip(right)
+        .fold(0u8, |diff, (a, b)| diff | (a ^ b))
+        == 0
 }
 
 /// Origin 検査 + CORS/PNA ヘッダ付与 + プリフライト応答。
@@ -294,11 +416,23 @@ fn add_cors(h: &mut HeaderMap, origin: Option<&str>) {
         h.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, v);
     }
     h.insert(header::VARY, HeaderValue::from_static("Origin"));
-    h.insert(header::ACCESS_CONTROL_ALLOW_METHODS, HeaderValue::from_static("GET, POST, OPTIONS"));
-    h.insert(header::ACCESS_CONTROL_ALLOW_HEADERS, HeaderValue::from_static("authorization, content-type"));
+    h.insert(
+        header::ACCESS_CONTROL_ALLOW_METHODS,
+        HeaderValue::from_static("GET, POST, OPTIONS"),
+    );
+    h.insert(
+        header::ACCESS_CONTROL_ALLOW_HEADERS,
+        HeaderValue::from_static("authorization, content-type"),
+    );
     // Private Network Access: https ページ→localhost のプリフライトを通すために必須。
-    h.insert("access-control-allow-private-network", HeaderValue::from_static("true"));
-    h.insert(header::ACCESS_CONTROL_MAX_AGE, HeaderValue::from_static("600"));
+    h.insert(
+        "access-control-allow-private-network",
+        HeaderValue::from_static("true"),
+    );
+    h.insert(
+        header::ACCESS_CONTROL_MAX_AGE,
+        HeaderValue::from_static("600"),
+    );
 }
 
 // ── ヘルパ ───────────────────────────────────────────────────────────────────
@@ -308,7 +442,10 @@ fn to_v<T: serde::Serialize>(x: T) -> Result<Value, String> {
 }
 
 fn s(a: &Value, k: &str) -> Result<String, String> {
-    a.get(k).and_then(|v| v.as_str()).map(|s| s.to_string()).ok_or_else(|| format!("missing arg: {k}"))
+    a.get(k)
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| format!("missing arg: {k}"))
 }
 
 fn opt_s(a: &Value, k: &str) -> Option<String> {
@@ -316,17 +453,55 @@ fn opt_s(a: &Value, k: &str) -> Option<String> {
 }
 
 fn b(a: &Value, k: &str) -> Result<bool, String> {
-    a.get(k).and_then(|v| v.as_bool()).ok_or_else(|| format!("missing arg: {k}"))
+    a.get(k)
+        .and_then(|v| v.as_bool())
+        .ok_or_else(|| format!("missing arg: {k}"))
 }
 
 fn u8n(a: &Value, k: &str) -> Result<u8, String> {
-    a.get(k).and_then(|v| v.as_u64()).map(|n| n as u8).ok_or_else(|| format!("missing arg: {k}"))
+    a.get(k)
+        .and_then(|v| v.as_u64())
+        .map(|n| n as u8)
+        .ok_or_else(|| format!("missing arg: {k}"))
+}
+
+fn from<T: serde::de::DeserializeOwned>(a: &Value, k: &str) -> Result<T, String> {
+    serde_json::from_value(
+        a.get(k)
+            .cloned()
+            .ok_or_else(|| format!("missing arg: {k}"))?,
+    )
+    .map_err(|e| format!("invalid arg {k}: {e}"))
 }
 
 fn gen_token() -> String {
     use rand::Rng;
     let mut rng = rand::thread_rng();
-    (0..32).map(|_| format!("{:02x}", rng.gen::<u8>())).collect()
+    (0..32)
+        .map(|_| format!("{:02x}", rng.gen::<u8>()))
+        .collect()
+}
+
+fn write_token_file(path: &str, token: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let path = std::path::Path::new(path);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).truncate(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    file.write_all(token.as_bytes())
 }
 
 fn default_origins() -> Vec<String> {

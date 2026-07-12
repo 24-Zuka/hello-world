@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.24zuka.jarvis-orchestrator</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__BINARY__</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>JARVIS_BRIDGE_ADDR</key>
+    <string>__ADDR__</string>
+    <key>JARVIS_BRIDGE_TOKEN_FILE</key>
+    <string>__HOME__/Library/Application Support/JARVIS Cockpit/bridge.token</string>
+    <key>JARVIS_ORCHESTRATOR_AUTO_START</key>
+    <string>1</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/JARVIS Cockpit/orchestrator.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/JARVIS Cockpit/orchestrator.err.log</string>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+</dict>
+</plist>

@@ -18,7 +18,7 @@ pub trait EventSink: Send + Sync {
 }
 
 /// allowlist。Tauri の shell scope と整合（§9: codex / git / launchctl / 同梱scripts）。
-const ALLOWED: &[&str] = &["codex", "git", "launchctl", "bash", "sh"];
+const ALLOWED: &[&str] = &["codex", "git", "launchctl", "bash", "sh", "open"];
 
 static JOB_SEQ: AtomicU64 = AtomicU64::new(1);
 
@@ -110,9 +110,15 @@ pub async fn spawn_streamed(
                         .and_then(|v| v.as_str())
                         .unwrap_or("event")
                         .to_string();
-                    sink.emit("job:event", json!({ "jobId": jid, "type": kind, "payload": val }));
+                    sink.emit(
+                        "job:event",
+                        json!({ "jobId": jid, "type": kind, "payload": val }),
+                    );
                 }
-                sink.emit("job:log", json!({ "jobId": jid, "line": line, "stream": "stdout" }));
+                sink.emit(
+                    "job:log",
+                    json!({ "jobId": jid, "line": line, "stream": "stdout" }),
+                );
             }
         });
     }
@@ -123,7 +129,10 @@ pub async fn spawn_streamed(
         tokio::spawn(async move {
             let mut lines = BufReader::new(err).lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                sink.emit("job:log", json!({ "jobId": jid, "line": line, "stream": "stderr" }));
+                sink.emit(
+                    "job:log",
+                    json!({ "jobId": jid, "line": line, "stream": "stderr" }),
+                );
             }
         });
     }

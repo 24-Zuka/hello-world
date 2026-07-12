@@ -51,6 +51,140 @@ pub fn task_list(state: State<'_, Cockpit>) -> Result<Vec<TaskCard>, String> {
     core::commands::task_list(state.inner())
 }
 
+#[tauri::command]
+pub fn task_get(state: State<'_, Cockpit>, task_id: String) -> Result<TaskCard, String> {
+    core::commands::task_get(state.inner(), task_id)
+}
+#[tauri::command]
+pub fn task_create(state: State<'_, Cockpit>, task: TaskCard) -> Result<TaskCard, String> {
+    core::commands::task_create(state.inner(), task)
+}
+#[tauri::command]
+pub fn task_update(state: State<'_, Cockpit>, task: TaskCard) -> Result<TaskCard, String> {
+    core::commands::task_update(state.inner(), task)
+}
+#[tauri::command]
+pub fn task_import(state: State<'_, Cockpit>, payload: String) -> Result<Vec<TaskCard>, String> {
+    core::commands::task_import(state.inner(), payload)
+}
+#[tauri::command]
+pub fn task_archive(state: State<'_, Cockpit>, task_id: String) -> Result<TaskCard, String> {
+    core::commands::task_archive(state.inner(), task_id)
+}
+#[tauri::command]
+pub fn task_route_preview(
+    state: State<'_, Cockpit>,
+    task_id: String,
+) -> Result<RoutingDecision, String> {
+    core::commands::task_route_preview(state.inner(), task_id)
+}
+#[tauri::command]
+pub fn task_enqueue(state: State<'_, Cockpit>, task_id: String) -> Result<TaskCard, String> {
+    core::commands::task_enqueue(state.inner(), task_id)
+}
+#[tauri::command]
+pub async fn task_run_now(
+    app: AppHandle,
+    state: State<'_, Cockpit>,
+    task_id: String,
+) -> Result<Option<TaskCard>, String> {
+    core::commands::task_run_now(sink(app), state.inner(), task_id).await
+}
+#[tauri::command]
+pub fn task_cancel(state: State<'_, Cockpit>, task_id: String) -> Result<TaskCard, String> {
+    core::commands::task_cancel(state.inner(), task_id)
+}
+#[tauri::command]
+pub fn task_retry(state: State<'_, Cockpit>, task_id: String) -> Result<TaskCard, String> {
+    core::commands::task_retry(state.inner(), task_id)
+}
+#[tauri::command]
+pub fn task_approve(
+    state: State<'_, Cockpit>,
+    task_id: String,
+    feedback: Option<String>,
+) -> Result<TaskCard, String> {
+    core::commands::task_approve(state.inner(), task_id, feedback)
+}
+#[tauri::command]
+pub fn task_reject(
+    state: State<'_, Cockpit>,
+    task_id: String,
+    feedback: Option<String>,
+) -> Result<TaskCard, String> {
+    core::commands::task_reject(state.inner(), task_id, feedback)
+}
+#[tauri::command]
+pub fn task_feedback(
+    state: State<'_, Cockpit>,
+    task_id: String,
+    feedback: String,
+) -> Result<TaskCard, String> {
+    core::commands::task_feedback(state.inner(), task_id, feedback)
+}
+#[tauri::command]
+pub fn task_artifacts(
+    state: State<'_, Cockpit>,
+    task_id: String,
+) -> Result<Vec<TaskArtifact>, String> {
+    core::commands::task_artifacts(state.inner(), task_id)
+}
+#[tauri::command]
+pub fn task_artifact_read(
+    state: State<'_, Cockpit>,
+    task_id: String,
+    path: String,
+) -> Result<String, String> {
+    core::commands::task_artifact_read(state.inner(), task_id, path)
+}
+#[tauri::command]
+pub fn task_artifact_open(state: State<'_, Cockpit>, task_id: String) -> Result<(), String> {
+    core::commands::task_artifact_open(state.inner(), task_id)
+}
+
+#[tauri::command]
+pub fn orchestrator_status(state: State<'_, Cockpit>) -> Result<OrchestratorStatus, String> {
+    core::commands::orchestrator_status(state.inner())
+}
+#[tauri::command]
+pub fn orchestrator_start(
+    app: AppHandle,
+    state: State<'_, Cockpit>,
+) -> Result<OrchestratorStatus, String> {
+    core::commands::orchestrator_start(sink(app), state.inner())
+}
+#[tauri::command]
+pub fn orchestrator_pause(state: State<'_, Cockpit>) -> Result<OrchestratorStatus, String> {
+    core::commands::orchestrator_pause(state.inner())
+}
+#[tauri::command]
+pub fn orchestrator_resume(state: State<'_, Cockpit>) -> Result<OrchestratorStatus, String> {
+    core::commands::orchestrator_resume(state.inner())
+}
+#[tauri::command]
+pub fn orchestrator_stop(state: State<'_, Cockpit>) -> Result<OrchestratorStatus, String> {
+    core::commands::orchestrator_stop(state.inner())
+}
+#[tauri::command]
+pub async fn orchestrator_run_once(
+    app: AppHandle,
+    state: State<'_, Cockpit>,
+) -> Result<Option<TaskCard>, String> {
+    core::commands::orchestrator_run_once(sink(app), state.inner()).await
+}
+#[tauri::command]
+pub async fn worker_health(state: State<'_, Cockpit>) -> Result<Vec<WorkerHealth>, String> {
+    core::commands::worker_health(state.inner()).await
+}
+#[tauri::command]
+pub async fn model_capabilities(state: State<'_, Cockpit>) -> Result<Vec<ModelCapability>, String> {
+    core::commands::model_capabilities(state.inner()).await
+}
+#[tauri::command]
+pub async fn model_refresh(state: State<'_, Cockpit>) -> Result<Vec<ModelCapability>, String> {
+    core::commands::model_refresh(state.inner()).await
+}
+
 // ── MCP ─────────────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -71,7 +205,11 @@ pub fn worktree_list(state: State<'_, Cockpit>, repo: String) -> Result<Vec<Work
 }
 
 #[tauri::command]
-pub fn worktree_create(state: State<'_, Cockpit>, repo: String, feature: String) -> Result<Worktree, String> {
+pub fn worktree_create(
+    state: State<'_, Cockpit>,
+    repo: String,
+    feature: String,
+) -> Result<Worktree, String> {
     core::commands::worktree_create(state.inner(), repo, feature)
 }
 
@@ -135,7 +273,10 @@ pub async fn vault_delete(state: State<'_, Cockpit>, path: String) -> Result<(),
 }
 
 #[tauri::command]
-pub async fn vault_search(state: State<'_, Cockpit>, query: String) -> Result<Vec<SearchHit>, String> {
+pub async fn vault_search(
+    state: State<'_, Cockpit>,
+    query: String,
+) -> Result<Vec<SearchHit>, String> {
     core::commands::vault_search(state.inner(), query).await
 }
 
@@ -152,7 +293,11 @@ pub fn launchd_toggle(label: String, on: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn launchd_run_now(app: AppHandle, state: State<'_, Cockpit>, label: String) -> Result<String, String> {
+pub async fn launchd_run_now(
+    app: AppHandle,
+    state: State<'_, Cockpit>,
+    label: String,
+) -> Result<String, String> {
     core::commands::launchd_run_now(sink(app), state.inner(), label).await
 }
 
@@ -164,7 +309,11 @@ pub fn launchd_set_time(label: String, hour: u8, minute: u8) -> Result<(), Strin
 // ── Research ────────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn research_scan(app: AppHandle, state: State<'_, Cockpit>, topic: String) -> Result<String, String> {
+pub async fn research_scan(
+    app: AppHandle,
+    state: State<'_, Cockpit>,
+    topic: String,
+) -> Result<String, String> {
     core::commands::research_scan(sink(app), state.inner(), topic).await
 }
 
@@ -191,6 +340,9 @@ pub fn settings_get(state: State<'_, Cockpit>) -> Result<AppSettings, String> {
 }
 
 #[tauri::command]
-pub fn settings_set(state: State<'_, Cockpit>, patch: serde_json::Value) -> Result<AppSettings, String> {
+pub fn settings_set(
+    state: State<'_, Cockpit>,
+    patch: serde_json::Value,
+) -> Result<AppSettings, String> {
     core::commands::settings_set(state.inner(), patch)
 }

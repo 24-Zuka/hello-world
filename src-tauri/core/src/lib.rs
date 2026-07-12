@@ -11,6 +11,7 @@ pub mod exec;
 pub mod mock;
 pub mod models;
 pub mod obsidian;
+pub mod orchestrator;
 pub mod secrets;
 pub mod state;
 pub mod store;
