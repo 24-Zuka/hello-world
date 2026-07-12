@@ -62,6 +62,16 @@ codex login status # logged_in / method: chatgpt を確認
 2. **Local Server** を開始（既定で `http://localhost:1234`）。
 3. Settings 画面の「LM Studio エンドポイント」で **疎通テスト** → `接続 OK` を確認。
 
+### 2-3. AIRFLOWオーケストレーター常駐
+
+```bash
+chmod +x scripts/*orchestrator*.sh
+./scripts/install_orchestrator_launchd.sh
+./scripts/orchestrator_status.sh
+```
+
+既定8787番が使用中なら、`JARVIS_BRIDGE_ADDR=127.0.0.1:8797` を付けてinstallしてください。解除は `./scripts/uninstall_orchestrator_launchd.sh` です。SQLiteと成果物は保持されます。
+
 ### 2-3. Obsidian Local REST API（Vault 連携）
 
 1. Obsidian で **Local REST API** プラグインを有効化。

@@ -1,0 +1,1 @@
+{"title":"Markdown記事の見出し構成案","objective":"指定資料から記事構成を作る","task_type":"code_content","status":"READY","auto_run":true,"worker_type":"codex","instructions":"入力資料を読み、H2/H3の構成案を作る","output_format":"markdown","acceptance_criteria":["見出し階層が明確","未確認事項を明示"]}

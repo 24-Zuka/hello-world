@@ -1,0 +1,1 @@
+{"title":"X投稿の初稿","objective":"外部投稿前の下書きを作る","task_type":"short_draft","status":"DRAFT","auto_run":false,"requires_human_approval":true,"worker_type":"codex","instructions":"投稿はせず初稿だけ作る","output_format":"markdown","acceptance_criteria":["投稿しない","280字以内"]}

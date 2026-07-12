@@ -1,0 +1,4 @@
+[
+  {"task_id":"example-research","title":"前提調査","objective":"材料を整理する","task_type":"summary","status":"READY","auto_run":true,"worker_type":"mock"},
+  {"task_id":"example-draft","title":"調査結果から初稿","objective":"前提調査後に初稿を作る","task_type":"article","status":"READY","auto_run":true,"worker_type":"mock","dependencies":["example-research"]}
+]

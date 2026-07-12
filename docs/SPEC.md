@@ -1,4 +1,4 @@
-# JARVIS Cockpit — 仕様書（実装版 v1.1）
+# JARVIS Cockpit — 仕様書（実装版 v2.0）
 
 `jarvis-codex-org`（Codex × ローカル LM Studio × Obsidian の自動化エージェント組織）を、
 1 つの管制盤から可視化・操作するアプリケーションの**実装仕様書**。
@@ -41,7 +41,7 @@ GUI は「薄いラッパー」に徹し、頭脳（推論・判断）は Codex 
                          ┌─────────────────────────── src/lib/api.ts（唯一の窓口）
                          │  優先順位: Tauri → Bridge → Mock
    ┌─────────────┐       │
-   │  React 8画面 │───────┤── Tauri    : デスクトップアプリ（invoke / emit）
+   │  React 9画面 │───────┤── Tauri    : デスクトップアプリ（invoke / emit）
    │  (公開 Web)  │       │── Bridge   : 公開Web → ローカル jarvis-bridge（HTTP/SSE）
    └─────────────┘       │── Mock     : browserMock（公開デモ・実依存不要）
                          │
@@ -107,7 +107,8 @@ src-tauri/
 | **Schedule**（定時運用） | launchd ジョブ一覧（`launchd_list`）/ トグル（load/unload）/ 今すぐ実行 / 時刻編集 / 最終ログ tail。 |
 | **Research**（調査） | 自動スキャン（`research_scan` → Inbox ブリーフ）/ 手動ステーション外部リンク（Gemini Deep Research・NotebookLM、「自動化不可」明記）/ 結果取込。 |
 | **Quota & Cost**（コスト管制） | 5h ウィンドウ使用率 / 認証経路（ChatGPT✓ / `OPENAI_API_KEY` 検出時**赤旗**）/ **クレジット購入「無効」固定** / 退避モード / 既定モデル切替（要確認）。 |
-| **Settings**（設定） | **ブリッジ接続**（URL + Token、接続/切断）/ パス / トークン（Keychain 保存・平文非表示・**API キー欄なし**）/ MCP トグル / LM Studio 疎通テスト / `codex login` 起動。 |
+| **Tasks**（AI自動実行） | Task作成/取込/編集、Kanban、ルートプレビュー、Codex/LM Studio/Work実行、ログ、成果物、品質評価、承認。 |
+| **Settings**（設定） | **ブリッジ接続** / パス / Keychain / MCP / LM Studio / Codex / オーケストレーター設定。**API キー欄なし**。 |
 
 横断機能（`src/components/`）: 承認モーダル / ⌘K コマンドパレット / トースト / 空・エラー状態は「直し方」を一文提示。
 
@@ -118,7 +119,7 @@ src-tauri/
 `src/lib/api.ts` が唯一の窓口。Tauri 内なら `invoke`、Bridge なら HTTP `POST /invoke/:cmd`、
 それ以外は browserMock。引数キーは 3 経路で一致する。
 
-### 5.1 Commands（26）
+### 5.1 Commands
 `health_check` / `codex_auth_status` / `codex_login` / `quota_status` /
 `mcp_list` / `mcp_toggle(name, enabled)` /
 `worktree_list(repo)` / `worktree_create(repo, feature)` /
@@ -131,9 +132,23 @@ src-tauri/
 `config_get_model` / `config_set_model(model)` ［要確認］/
 `secret_set(key, value)` / `settings_get` / `settings_set(patch)`
 
+Automation: `task_get` / `task_create` / `task_update` / `task_import` / `task_archive` /
+`task_route_preview` / `task_enqueue` / `task_run_now` / `task_cancel` / `task_retry` /
+`task_approve` / `task_reject` / `task_feedback` / `task_artifacts` / `task_artifact_read` /
+`orchestrator_status` / `orchestrator_start` / `orchestrator_pause` / `orchestrator_resume` /
+`orchestrator_stop` / `orchestrator_run_once` / `worker_health` / `model_capabilities` / `model_refresh`.
+
 ### 5.2 Events（6）
 `job:log` / `job:event` / `job:done` / `health:tick` / `quota:tick` / `notify`
 （Tauri = emit、Bridge = SSE `GET /events` で `{event, payload}` 行を配信、5 秒間隔で health/quota tick）。
+
+Automation events: `task:created` / `task:updated` / `task:routed` / `task:started` /
+`task:log` / `task:event` / `task:artifact` / `task:review` / `task:completed` /
+`task:failed` / `task:cancelled` / `orchestrator:status` / `worker:health`.
+
+### 5.3 Durable automation
+
+SQLite (`~/Library/Application Support/JARVIS Cockpit/jarvis.sqlite3`) stores tasks, runs, artifact metadata, approvals, and events. Task acquisition uses an immediate transaction and lease fields. See [TASK_SCHEMA.md](TASK_SCHEMA.md), [MODEL_ROUTING.md](MODEL_ROUTING.md), and [SECURITY_AUTOMATION.md](SECURITY_AUTOMATION.md).
 
 ### 5.3 実コマンド対応（§3.1）
 ビルド = `codex exec --json`（JSONL 逐次解析）/ 認証 = `codex login status` / MCP = `codex mcp list --json` /

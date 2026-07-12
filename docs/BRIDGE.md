@@ -85,3 +85,9 @@ Obsidian トークンは、接続済みの状態で **Settings → トークン 
 | `JARVIS_BRIDGE_ADDR` | `127.0.0.1:8787` | 待ち受けアドレス |
 | `JARVIS_BRIDGE_TOKEN` | 起動時に生成 | 固定トークンを使いたい場合 |
 | `JARVIS_BRIDGE_ORIGINS` | 公開+ローカル開発 | 許可 Origin をカンマ区切りで上書き |
+| `JARVIS_BRIDGE_TOKEN_FILE` | 未設定 | Tokenを権限0600のファイルへ保存し、標準エラーへ値を出さない |
+| `JARVIS_ORCHESTRATOR_AUTO_START` | `0` | `1`でBridge起動時にオーケストレーターを開始 |
+| `JARVIS_DATABASE_PATH` | Application Support | SQLite保存先 |
+| `JARVIS_ARTIFACT_ROOT` | Application Support | 成果物保存先 |
+
+BridgeはTask本文をコマンドとして実行しません。Codexは引数配列とstdinを使います。リクエスト本文は2 MiB、成果物は1ファイル5 MiBに制限されます。

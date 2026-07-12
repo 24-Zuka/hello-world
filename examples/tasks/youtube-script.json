@@ -1,0 +1,1 @@
+{"title":"YouTube台本","objective":"8分動画の台本を作る","task_type":"script","status":"READY","auto_run":true,"worker_type":"codex","instructions":"導入、本編、まとめ、概要欄案を作る","output_format":"markdown","acceptance_criteria":["外部投稿しない","未確認情報を明示"]}

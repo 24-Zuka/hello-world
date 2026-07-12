@@ -1,5 +1,7 @@
 # JARVIS Cockpit
 
+AIRFLOW AI自動実行基盤を搭載しています。TaskをSQLiteへ保存し、Codex CLI（ChatGPTログイン）、LM Studio、Work手動パッケージへ安全に振り分けます。使い方は [docs/AUTOMATION.md](docs/AUTOMATION.md)、監査結果は [docs/AUTOMATION_AUDIT.md](docs/AUTOMATION_AUDIT.md) を参照してください。
+
 `jarvis-codex-org`（Codex × ローカル LM Studio × Obsidian の自動化エージェント組織）を、
 1 つのローカル・デスクトップ管制盤から可視化・操作するための GUI です。
 仕様書 *JARVIS Cockpit GUI 仕様書 v1.0*（2026-06-27）に基づく v1 実装。
@@ -8,7 +10,7 @@
 > セキュリティ・画面仕様・受け入れ基準を網羅。
 
 > 🌐 **公開Webアプリ**: https://24-zuka.github.io/hello-world/
-> ブラウザだけで 8 画面を操作できます。バックエンドは 3 トランスポートで動作:
+> ブラウザだけで 9 画面を操作できます。バックエンドは 3 トランスポートで動作:
 >
 > | モード | 接続先 | 用途 |
 > |---|---|---|
@@ -34,6 +36,7 @@
 | 画面 | 役割 |
 |---|---|
 | Dashboard | ヘルス・Plus 残量・今日のブリーフ・クイックアクション |
+| Tasks | Task登録・自動実行・ルーティング・ログ・成果物・承認 |
 | Agents | AI 組織図とサブエージェント、権限・割当モデルの可視化 |
 | Build | worktree → ビルド → ローカルレビュー → 差分（JSONL ログを逐次表示） |
 | Memory | Obsidian Vault の閲覧/編集、Handoff/DecisionLog のタイムライン |
@@ -59,11 +62,12 @@
 
 ```bash
 npm install
+npm test
 npm run build      # tsc 型チェック + Vite ビルド
 npm run preview    # http://localhost:5180
 ```
 
-Tauri ランタイム外ではバックエンドを `src/lib/browserMock.ts` が代替し、8 画面を
+Tauri ランタイム外ではバックエンドを `src/lib/browserMock.ts` が代替し、9 画面を
 モックデータで操作確認できます（実依存 = Codex / Obsidian / LM Studio は不要）。
 
 ### デスクトップアプリ（macOS 実機）

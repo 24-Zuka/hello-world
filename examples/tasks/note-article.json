@@ -1,0 +1,1 @@
+{"title":"note記事の初稿","objective":"提供情報を記事へ整理する","task_type":"article","status":"READY","auto_run":true,"worker_type":"codex","instructions":"構成、本文、未確認事項を作る","output_format":"markdown","acceptance_criteria":["出典を捏造しない","公開しない"]}

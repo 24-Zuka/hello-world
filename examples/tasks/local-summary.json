@@ -1,0 +1,1 @@
+{"title":"会議メモを3行に要約","objective":"入力文を3行に整理する","task_type":"summary","status":"READY","auto_run":true,"worker_type":"local_llm","instructions":"重要な決定と次の行動を3行で要約する","output_format":"markdown","acceptance_criteria":["3行以内","推測を含めない"]}
