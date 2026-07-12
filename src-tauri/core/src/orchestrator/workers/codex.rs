@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -14,6 +14,18 @@ use crate::exec::{guard, run_capture, EventSink};
 use crate::models::{ReasoningLevel, Status, TaskCard, WorkerHealth, WorkerType};
 
 pub struct CodexWorker;
+
+async fn write_prompt_and_close<W>(mut stdin: W, prompt: &str) -> Result<(), std::io::Error>
+where
+    W: AsyncWrite + Unpin,
+{
+    stdin.write_all(prompt.as_bytes()).await?;
+    stdin.shutdown().await?;
+    // `shutdown` flushes the writer; dropping it closes the pipe so Codex can
+    // finish its read_to_end before it starts the turn.
+    drop(stdin);
+    Ok(())
+}
 
 fn reasoning_arg(level: ReasoningLevel) -> &'static str {
     match level {
@@ -152,16 +164,11 @@ impl AiWorker for CodexWorker {
         let mut child = command
             .spawn()
             .map_err(|e| WorkerError::Failed(e.to_string()))?;
-        let mut stdin = child
+        let stdin = child
             .stdin
             .take()
             .ok_or_else(|| WorkerError::Failed("missing Codex stdin".into()))?;
-        stdin
-            .write_all(prompt.as_bytes())
-            .await
-            .map_err(|e| WorkerError::Failed(e.to_string()))?;
-        stdin
-            .shutdown()
+        write_prompt_and_close(stdin, prompt)
             .await
             .map_err(|e| WorkerError::Failed(e.to_string()))?;
 
@@ -281,6 +288,17 @@ fn mask_secrets(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::io::AsyncReadExt;
+
+    #[tokio::test]
+    async fn prompt_writer_closes_the_stream_after_writing() {
+        let (writer, mut reader) = tokio::io::duplex(128);
+        write_prompt_and_close(writer, "EOF test").await.unwrap();
+
+        let mut received = String::new();
+        reader.read_to_string(&mut received).await.unwrap();
+        assert_eq!(received, "EOF test");
+    }
 
     #[test]
     fn masks_bearer_and_api_style_tokens() {

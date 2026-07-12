@@ -7,8 +7,8 @@ Last updated: 2026-07-12 (Asia/Tokyo)
 - Branch: `codex/airflow-automation-orchestrator`
 - SQLite-backed orchestration, workers, Tasks UI, three transport adapters, and launchd templates are implemented.
 - Mock and LM Studio end-to-end execution completed through the Bridge, including restart persistence and artifacts.
-- Codex CLI starts through the ChatGPT-authenticated route, but the final output smoke test is currently blocked by the account usage limit.
-- The release binary and macOS `.app` bundle build successfully. DMG packaging stalled in Finder AppleScript and was stopped without producing a DMG.
+- Codex CLI completed an end-to-end Bridge task through the ChatGPT-authenticated route. The verification saved `run.jsonl`, output, review, and final-review artifacts.
+- The release binary, macOS `.app`, and a mount-verified `JARVIS Cockpit_1.0.0_aarch64.dmg` build successfully. The DMG uses a non-interactive image creation step because Finder AppleScript packaging was unreliable in this environment.
 - No production deployment, external posting, push/merge automation, paid API route, or data deletion is enabled.
 
 ## Known environment constraints
@@ -19,4 +19,4 @@ Last updated: 2026-07-12 (Asia/Tokyo)
 
 ## Next verification
 
-After the Codex usage window resets, run one low-risk Codex task and confirm `run.jsonl`, output, review, and final-review artifacts. Upgrade Vite in a separate dependency-focused change after compatibility testing.
+Upgrade Vite in a separate dependency-focused change after compatibility testing. A Draft PR still needs GitHub CLI authentication (or manual creation from the pushed branch).
