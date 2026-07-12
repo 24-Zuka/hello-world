@@ -58,4 +58,3 @@ JARVIS Cockpit currently displays AirFlow tickets but cannot persist automation 
 ## Rollback
 
 All changes stay on `codex/airflow-automation-orchestrator`. SQLite uses additive migrations; the legacy Markdown ticket reader remains available for import. No existing user data is deleted.
-

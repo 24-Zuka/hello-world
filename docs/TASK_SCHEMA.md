@@ -18,4 +18,3 @@
 ## 後方互換
 
 旧Markdown ticketの `id/category/status/priority/created/updated/tier/links/log` は移行用フィールドとして保持します。初回のSQLiteが空の場合、既存 `tickets/*.md` を読み込んでupsertします。
-

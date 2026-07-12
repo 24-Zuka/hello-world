@@ -20,4 +20,3 @@
 
 - EventSourceの制約によりBridge SSE tokenはquery parameter互換を残しています。Bridge側はtokenをログへ出さず、ブラウザ履歴やプロキシを介さないloopback運用に限定してください。
 - Vite 5系には開発サーバー関連の既知脆弱性があります。自動修正はVite 8へのmajor upgradeを要求するため、この機能実装とは分離して更新・互換検証してください。
-
