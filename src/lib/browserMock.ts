@@ -11,6 +11,11 @@ import type {
   ScheduleJob,
   SearchHit,
   TaskCard,
+  TaskArtifact,
+  RoutingDecision,
+  OrchestratorStatus,
+  ModelCapability,
+  WorkerHealth,
   VaultNode,
   Worktree,
 } from "../types";
@@ -43,6 +48,24 @@ let settings: AppSettings = {
   // デモでは未設定（赤旗オフ）。Quota 画面のロジック確認は store 側トグルで。
   openai_api_key_present: false,
   detected_api_keys: [],
+  database_path: "/Users/kai/Library/Application Support/JARVIS Cockpit/jarvis.sqlite3",
+  database_error: null,
+  orchestrator_enabled: true,
+  orchestrator_auto_start: false,
+  poll_interval_seconds: 5,
+  max_concurrency: 2,
+  codex_concurrency: 1,
+  lmstudio_concurrency: 1,
+  codex_default_reasoning: "medium",
+  luna_model: "gpt-5.4-mini",
+  terra_model: "gpt-5.4",
+  sol_model: "gpt-5.5",
+  lmstudio_default_model: "qwen_qwen3.5-9b",
+  auto_escalation: true,
+  quality_threshold: 85,
+  max_retries: 3,
+  artifact_root: "/Users/kai/Library/Application Support/JARVIS Cockpit/workspace/tasks",
+  log_retention_days: 30,
 };
 
 let jobSeq = 1;
@@ -113,13 +136,50 @@ APIキー入力欄を一切持たない方針を確定（§0.2）。
   "MEMORY.md": "# MEMORY\n\n共有記憶のルート。書き物文化の中心。\n",
 };
 
-const TASKS: TaskCard[] = [
+const AUTOMATION_DEFAULTS = {
+  parent_task_id: null,
+  description: "",
+  objective: "",
+  task_type: "general",
+  status: "DRAFT",
+  task_priority: "MEDIUM",
+  worker_type: null,
+  requested_model: null,
+  selected_model: null,
+  requested_reasoning: null,
+  selected_reasoning: null,
+  routing_reason: null,
+  auto_run: false,
+  requires_human_approval: false,
+  instructions: "",
+  context: "",
+  input_refs: [],
+  source_urls: [],
+  output_format: "markdown",
+  acceptance_criteria: [],
+  max_attempts: 3,
+  attempt_count: 0,
+  timeout_seconds: 900,
+  created_at: "2026-07-01T09:00:00+09:00",
+  last_updated: "2026-07-01T09:00:00+09:00",
+  queued_at: null,
+  started_at: null,
+  completed_at: null,
+  result_summary: null,
+  artifact_paths: [],
+  error_message: null,
+  lease_owner: null,
+  lease_expires_at: null,
+} satisfies Pick<TaskCard, "parent_task_id" | "description" | "objective" | "task_type" | "status" | "task_priority" | "worker_type" | "requested_model" | "selected_model" | "requested_reasoning" | "selected_reasoning" | "routing_reason" | "auto_run" | "requires_human_approval" | "instructions" | "context" | "input_refs" | "source_urls" | "output_format" | "acceptance_criteria" | "max_attempts" | "attempt_count" | "timeout_seconds" | "created_at" | "last_updated" | "queued_at" | "started_at" | "completed_at" | "result_summary" | "artifact_paths" | "error_message" | "lease_owner" | "lease_expires_at">;
+
+let TASKS: TaskCard[] = [
   {
+    ...AUTOMATION_DEFAULTS,
     id: "TKT-20260701-001",
     task_id: "TASK-2026-0701A",
     title: "AirFlow完全版仕様書をアプリ実装へ反映する",
     category: "Engineering",
-    status: "Doing",
+    legacy_status: "Doing",
     priority: 1,
     risk_score: 2.4,
     created: "2026-07-01T09:00:00+09:00",
@@ -132,13 +192,20 @@ const TASKS: TaskCard[] = [
     dependencies: [],
     links: ["[[01_Projects/AirFlow AI自動化タスクボード 完全版仕様書]]"],
     log: ["Design Spec v1.0 をUIトークンへ反映中"],
+    status: "RUNNING",
+    task_priority: "HIGH",
+    worker_type: "codex",
+    auto_run: true,
+    objective: "AirFlow仕様を実装する",
+    instructions: "実装と検証を行う",
   },
   {
+    ...AUTOMATION_DEFAULTS,
     id: "TKT-20260701-002",
     task_id: "TASK-2026-0701B",
     title: "OPENAI/GEMINI APIキー検出時の赤旗を確認する",
     category: "Business",
-    status: "Waiting",
+    legacy_status: "Waiting",
     priority: 1,
     risk_score: 3.2,
     created: "2026-07-01T09:30:00+09:00",
@@ -151,13 +218,18 @@ const TASKS: TaskCard[] = [
     dependencies: ["TASK-2026-0701A"],
     links: ["[[04_Context/AI秘書システム]]"],
     log: ["risk_score >= 3.0 のため承認モーダル対象"],
+    status: "AWAITING_APPROVAL",
+    task_priority: "HIGH",
+    worker_type: "human",
+    requires_human_approval: true,
   },
   {
+    ...AUTOMATION_DEFAULTS,
     id: "TKT-20260701-003",
     task_id: "TASK-2026-0701C",
     title: "明朝の朝礼レポートに要判断を集約する",
     category: "Content",
-    status: "Today",
+    legacy_status: "Today",
     priority: 2,
     risk_score: 1.4,
     created: "2026-07-01T10:00:00+09:00",
@@ -170,8 +242,14 @@ const TASKS: TaskCard[] = [
     dependencies: [],
     links: ["[[90_Daily/AirFlow_2026-06-29_朝礼]]"],
     log: ["LM Studioで分類済み"],
+    status: "READY",
+    worker_type: "local_llm",
+    auto_run: true,
   },
 ];
+
+let orchestrator: OrchestratorStatus = { mode: "stopped", enabled: true, poll_interval_seconds: 5, running_tasks: 0, last_tick_at: null, last_error: null };
+const artifacts = new Map<string, TaskArtifact[]>();
 
 // ── invoke ハンドラ ──────────────────────────────────────────────────────────
 export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
@@ -193,6 +271,93 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
         source: "unknown" } as Quota);
     case "task_list":
       return r(TASKS);
+    case "task_get": {
+      const task = TASKS.find((task) => task.task_id === a.task_id);
+      if (!task) throw new Error("task not found");
+      return r(task);
+    }
+    case "task_create": {
+      const input = a.task as TaskCard;
+      const id = input.task_id || `task-${Date.now()}`;
+      const task = { ...AUTOMATION_DEFAULTS, ...input, id: input.id || id, task_id: id, created_at: new Date().toISOString(), last_updated: new Date().toISOString() } as TaskCard;
+      TASKS = [task, ...TASKS];
+      emit("task:created", task);
+      return r(task);
+    }
+    case "task_update": {
+      const input = a.task as TaskCard;
+      TASKS = TASKS.map((task) => task.task_id === input.task_id ? input : task);
+      emit("task:updated", input);
+      return r(input);
+    }
+    case "task_import": {
+      const payload = String(a.payload ?? "");
+      let imported: TaskCard[];
+      try {
+        const parsed = JSON.parse(payload) as TaskCard | TaskCard[];
+        imported = Array.isArray(parsed) ? parsed : [parsed];
+      } catch {
+        imported = [{ ...AUTOMATION_DEFAULTS, id: "", task_id: "", title: payload.match(/^#\s+(.+)$/m)?.[1] ?? "Imported task", category: "Business", legacy_status: "Inbox", priority: 2, risk_score: 1, created: "", updated: "", due: null, source: "manual", assignee: "human", tier: 1, decision_required: false, dependencies: [], links: [], log: [], description: payload }];
+      }
+      const created = imported.map((input, index) => {
+        const id = input.task_id || `task-${Date.now()}-${index}`;
+        return { ...AUTOMATION_DEFAULTS, ...input, id: input.id || id, task_id: id, created_at: new Date().toISOString(), last_updated: new Date().toISOString() } as TaskCard;
+      });
+      TASKS = [...created, ...TASKS];
+      created.forEach((task) => emit("task:created", task));
+      return r(created);
+    }
+    case "task_archive":
+      return r(updateMockTask(String(a.task_id), { status: "ARCHIVED", auto_run: false }));
+    case "task_route_preview":
+      return r(mockRoute(TASKS.find((task) => task.task_id === a.task_id)!));
+    case "task_enqueue":
+      return r(updateMockTask(String(a.task_id), { status: "QUEUED", legacy_status: "Today", auto_run: true, queued_at: new Date().toISOString() }));
+    case "task_run_now": {
+      const task = updateMockTask(String(a.task_id), { status: "RUNNING", legacy_status: "Doing", attempt_count: (TASKS.find((t) => t.task_id === a.task_id)?.attempt_count ?? 0) + 1 });
+      const job = nextJob();
+      streamJob(job, ["{\"type\":\"task_started\"}", "{\"type\":\"artifact_created\"}"]);
+      setTimeout(() => {
+        const path = `/mock/tasks/${task.task_id}/output.md`;
+        artifacts.set(task.task_id, [{ artifact_id: `artifact-${task.task_id}`, task_id: task.task_id, kind: "output", path, media_type: "text/markdown", size_bytes: 180, created_at: new Date().toISOString() }]);
+        const completed = updateMockTask(task.task_id, { status: "COMPLETED", legacy_status: "Done", completed_at: new Date().toISOString(), artifact_paths: [path], result_summary: "Mock worker completed" });
+        emit("task:completed", completed);
+      }, 1000);
+      return r(task);
+    }
+    case "task_cancel":
+      return r(updateMockTask(String(a.task_id), { status: "CANCELLED", auto_run: false }));
+    case "task_retry":
+      return r(updateMockTask(String(a.task_id), { status: "QUEUED", auto_run: true, error_message: null }));
+    case "task_approve":
+      return r(updateMockTask(String(a.task_id), { status: "QUEUED", auto_run: true, requires_human_approval: false, decision_required: false }));
+    case "task_reject":
+      return r(updateMockTask(String(a.task_id), { status: "CANCELLED", auto_run: false }));
+    case "task_feedback":
+      return r(updateMockTask(String(a.task_id), { status: "AWAITING_INPUT", auto_run: false, error_message: String(a.feedback ?? "") }));
+    case "task_artifacts":
+      return r(artifacts.get(String(a.task_id)) ?? []);
+    case "task_artifact_read":
+      return r("# Mock artifact\n\nブラウザデモで生成された決定論的な成果物です。");
+    case "task_artifact_open":
+      return r(undefined);
+    case "orchestrator_status":
+      return r(orchestrator);
+    case "orchestrator_start":
+      orchestrator = { ...orchestrator, mode: "running" }; emit("orchestrator:status", orchestrator); return r(orchestrator);
+    case "orchestrator_pause":
+      orchestrator = { ...orchestrator, mode: "paused" }; emit("orchestrator:status", orchestrator); return r(orchestrator);
+    case "orchestrator_resume":
+      orchestrator = { ...orchestrator, mode: "running" }; emit("orchestrator:status", orchestrator); return r(orchestrator);
+    case "orchestrator_stop":
+      orchestrator = { ...orchestrator, mode: "stopped" }; emit("orchestrator:status", orchestrator); return r(orchestrator);
+    case "orchestrator_run_once":
+      return r(null);
+    case "worker_health":
+      return r([{ worker_type: "codex", status: "ok", models: ["gpt-5.5", "gpt-5.4"], note: null }, { worker_type: "local_llm", status: "ok", models: ["qwen_qwen3.5-9b"], note: null }, { worker_type: "work_manual", status: "ok", models: [], note: null }, { worker_type: "mock", status: "ok", models: ["deterministic-mock"], note: null }] as WorkerHealth[]);
+    case "model_capabilities":
+    case "model_refresh":
+      return r([{ worker_type: "codex", model: "gpt-5.5", reasoning_levels: ["low", "medium", "high", "very_high"], available: true }, { worker_type: "local_llm", model: "qwen_qwen3.5-9b", reasoning_levels: ["low"], available: true }] as ModelCapability[]);
     case "mcp_list":
       return r([
         { name: "obsidian", enabled: true, transport: "stdio" },
@@ -294,6 +459,21 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     default:
       throw new Error(`browserMock: 未実装コマンド ${cmd}`);
   }
+}
+
+function updateMockTask(taskId: string, patch: Partial<TaskCard>): TaskCard {
+  const current = TASKS.find((task) => task.task_id === taskId);
+  if (!current) throw new Error("task not found");
+  const updated = { ...current, ...patch, last_updated: new Date().toISOString() };
+  TASKS = TASKS.map((task) => task.task_id === taskId ? updated : task);
+  emit("task:updated", updated);
+  return updated;
+}
+
+function mockRoute(task: TaskCard): RoutingDecision {
+  const approval = task.requires_human_approval || task.risk_score >= 3;
+  const worker = approval ? "human" : task.worker_type ?? (task.task_type.includes("summary") ? "local_llm" : "codex");
+  return { worker_type: worker, model: worker === "codex" ? settings.default_model : worker === "local_llm" ? settings.lmstudio_default_model : null, reasoning: task.requested_reasoning ?? (worker === "local_llm" ? "low" : "medium"), reason: approval ? "人間承認が必要です。" : "タスク種別に基づくルール判定です。", estimated_size: "small", escalation_condition: "品質75点未満でエスカレーション", requires_human_approval: approval };
 }
 
 // 定期 health:tick / quota:tick を擬似発火（§7.2）。

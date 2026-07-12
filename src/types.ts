@@ -78,6 +78,10 @@ export interface ScheduleJob {
 export type AirFlowStatus = "Inbox" | "Today" | "Doing" | "Waiting" | "Done";
 export type AirFlowCategory = "Business" | "Engineering" | "Content";
 export type AirFlowAssignee = "codex" | "lmstudio" | "gemini" | "human";
+export type TaskStatus = "DRAFT" | "READY" | "QUEUED" | "ROUTING" | "RUNNING" | "AI_REVIEW" | "AWAITING_INPUT" | "AWAITING_APPROVAL" | "COMPLETED" | "FAILED" | "CANCELLED" | "ARCHIVED";
+export type TaskPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type WorkerType = "local_llm" | "codex" | "work_manual" | "human" | "mock";
+export type ReasoningLevel = "low" | "medium" | "high" | "very_high" | "max" | "ultra";
 
 // AirFlow完全版 §4.3: Markdown/YAML と GUI JSON ビューの共通 TaskCard。
 export interface TaskCard {
@@ -85,7 +89,7 @@ export interface TaskCard {
   task_id: string;
   title: string;
   category: AirFlowCategory;
-  status: AirFlowStatus;
+  legacy_status: AirFlowStatus;
   priority: 1 | 2 | 3;
   risk_score: number;
   created: string;
@@ -98,6 +102,82 @@ export interface TaskCard {
   dependencies: string[];
   links: string[];
   log: string[];
+  parent_task_id?: string | null;
+  description: string;
+  objective: string;
+  task_type: string;
+  status: TaskStatus;
+  task_priority: TaskPriority;
+  worker_type?: WorkerType | null;
+  requested_model?: string | null;
+  selected_model?: string | null;
+  requested_reasoning?: ReasoningLevel | null;
+  selected_reasoning?: ReasoningLevel | null;
+  routing_reason?: string | null;
+  auto_run: boolean;
+  requires_human_approval: boolean;
+  instructions: string;
+  context: string;
+  input_refs: string[];
+  source_urls: string[];
+  output_format: string;
+  acceptance_criteria: string[];
+  max_attempts: number;
+  attempt_count: number;
+  timeout_seconds: number;
+  created_at: string;
+  last_updated: string;
+  queued_at?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  result_summary?: string | null;
+  artifact_paths: string[];
+  error_message?: string | null;
+  lease_owner?: string | null;
+  lease_expires_at?: string | null;
+}
+
+export interface RoutingDecision {
+  worker_type: WorkerType;
+  model?: string | null;
+  reasoning: ReasoningLevel;
+  reason: string;
+  estimated_size: string;
+  escalation_condition: string;
+  requires_human_approval: boolean;
+}
+
+export interface TaskArtifact {
+  artifact_id: string;
+  task_id: string;
+  kind: string;
+  path: string;
+  media_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+export interface OrchestratorStatus {
+  mode: "stopped" | "running" | "paused";
+  enabled: boolean;
+  poll_interval_seconds: number;
+  running_tasks: number;
+  last_tick_at?: string | null;
+  last_error?: string | null;
+}
+
+export interface WorkerHealth {
+  worker_type: WorkerType;
+  status: Status;
+  models: string[];
+  note?: string | null;
+}
+
+export interface ModelCapability {
+  worker_type: WorkerType;
+  model: string;
+  reasoning_levels: ReasoningLevel[];
+  available: boolean;
 }
 
 export interface AppSettings {
@@ -112,6 +192,24 @@ export interface AppSettings {
   retreat_mode: boolean;
   openai_api_key_present: boolean;
   detected_api_keys: string[];
+  database_path: string;
+  database_error?: string | null;
+  orchestrator_enabled: boolean;
+  orchestrator_auto_start: boolean;
+  poll_interval_seconds: number;
+  max_concurrency: number;
+  codex_concurrency: number;
+  lmstudio_concurrency: number;
+  codex_default_reasoning: ReasoningLevel;
+  luna_model: string;
+  terra_model: string;
+  sol_model: string;
+  lmstudio_default_model: string;
+  auto_escalation: boolean;
+  quality_threshold: number;
+  max_retries: number;
+  artifact_root: string;
+  log_retention_days: number;
 }
 
 // 承認モーダル（§5, §14.3）。risk_score>=3.0 か §9 権限表で必須。
@@ -135,6 +233,7 @@ export interface ReviewFinding {
 
 export type ScreenId =
   | "dashboard"
+  | "tasks"
   | "agents"
   | "build"
   | "memory"

@@ -16,8 +16,9 @@ import type {
   VaultNode,
   Worktree,
 } from "../types";
+import { Tasks } from "../screens/Tasks";
 
-type Screen = "dashboard" | "agents" | "build" | "memory" | "schedule" | "research" | "quota" | "settings";
+type Screen = "dashboard" | "tasks" | "agents" | "build" | "memory" | "schedule" | "research" | "quota" | "settings";
 type Toast = { id: number; level: "info" | "warn" | "error"; title: string; body: string };
 type Approval = {
   title: string;
@@ -29,6 +30,7 @@ type Approval = {
 
 const NAV: { id: Screen; label: string; jp: string; group: "管制" | "運用" }[] = [
   { id: "dashboard", label: "Dashboard", jp: "司令室", group: "管制" },
+  { id: "tasks", label: "Tasks", jp: "AI自動実行", group: "管制" },
   { id: "agents", label: "Agents", jp: "組織図", group: "管制" },
   { id: "build", label: "Build", jp: "開発パイプライン", group: "管制" },
   { id: "memory", label: "Memory", jp: "記憶 / Vault", group: "管制" },
@@ -180,6 +182,7 @@ export function AirFlowApp() {
         <HealthRail health={health} transport={transport} note={health?.note} />
         <div className="flex-1 overflow-auto">
           {screen === "dashboard" && <Dashboard {...ctx} />}
+          {screen === "tasks" && <Tasks tasks={tasks} refresh={refreshTasks} toast={toast} requestApproval={setApproval} />}
           {screen === "agents" && <Agents />}
           {screen === "build" && <Build {...ctx} />}
           {screen === "memory" && <Memory {...ctx} />}
@@ -243,8 +246,8 @@ function Header({ title, jp, children }: { title: string; jp: string; children?:
 }
 
 function Dashboard({ tasks, quota, settings, setScreen, jobs, toast }: typeof ctxShape) {
-  const today = tasks.filter((t) => t.status === "Today" || t.status === "Doing");
-  const waiting = tasks.filter((t) => t.status === "Waiting" || t.decision_required);
+  const today = tasks.filter((t) => t.legacy_status === "Today" || t.legacy_status === "Doing");
+  const waiting = tasks.filter((t) => t.legacy_status === "Waiting" || t.decision_required);
   const active = Object.values(jobs).filter((j) => j.status === "running").length;
   return (
     <div>
@@ -254,7 +257,7 @@ function Dashboard({ tasks, quota, settings, setScreen, jobs, toast }: typeof ct
       </Header>
       <div className="grid gap-4 p-4 xl:grid-cols-12 xl:p-6">
         <Metric label="Today" value={today.length} tone="accent" />
-        <Metric label="Doing" value={tasks.filter((t) => t.status === "Doing").length} tone="ok" />
+        <Metric label="Doing" value={tasks.filter((t) => t.legacy_status === "Doing").length} tone="ok" />
         <Metric label="Waiting" value={waiting.length} tone="warn" />
         <Metric label="Threads" value={`${active}/4`} tone="muted" />
         <Panel title="Plus残量（5h ウィンドウ）" className="xl:col-span-3">
@@ -538,6 +541,27 @@ function SettingsScreen({ settings, health, transport, reloadSettings, toast, re
           <div className="mb-3 grid gap-2 text-sm sm:grid-cols-3"><Row k="Codex" v={health?.codex ?? "unknown"} tone={health?.codex === "ok" ? "ok" : health?.codex === "warn" ? "warn" : "muted"} /><Row k="LM Studio" v={health?.lmstudio ?? "unknown"} tone={health?.lmstudio === "ok" ? "ok" : health?.lmstudio === "warn" ? "warn" : "muted"} /><Row k="Obsidian" v={health?.obsidian ?? "unknown"} tone={health?.obsidian === "ok" ? "ok" : health?.obsidian === "warn" ? "warn" : "muted"} /></div>
           <div className="flex flex-wrap gap-2"><Button onClick={async () => { await api.healthCheck(); toast({ level: "info", title: "疎通テスト", body: "ヘルスチェックを実行しました。" }); }}>疎通テスト</Button><Button onClick={async () => { await api.codexLogin(); toast({ level: "info", title: "codex login", body: "ログイン処理を開始しました。" }); }}>codex login</Button></div>
         </Panel>
+        <Panel title="AIオーケストレーター">
+          {draft?.database_error && <div role="alert" className="mb-3 rounded-lg border border-down/50 bg-down/10 p-3 text-xs text-down">{draft.database_error}</div>}
+          <div className="mb-3 flex flex-wrap gap-4 text-xs">
+            <label className="inline-flex items-center gap-2"><input type="checkbox" checked={draft?.orchestrator_enabled ?? false} onChange={(e) => setDraft((d) => d && { ...d, orchestrator_enabled: e.target.checked })} />有効</label>
+            <label className="inline-flex items-center gap-2"><input type="checkbox" checked={draft?.orchestrator_auto_start ?? false} onChange={(e) => setDraft((d) => d && { ...d, orchestrator_auto_start: e.target.checked })} />起動時に開始</label>
+            <label className="inline-flex items-center gap-2"><input type="checkbox" checked={draft?.auto_escalation ?? false} onChange={(e) => setDraft((d) => d && { ...d, auto_escalation: e.target.checked })} />自動エスカレーション</label>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="ポーリング秒" value={String(draft?.poll_interval_seconds ?? 5)} onChange={(v) => setDraft((d) => d && { ...d, poll_interval_seconds: Number(v) || 5 })} />
+            <Field label="全体同時実行" value={String(draft?.max_concurrency ?? 2)} onChange={(v) => setDraft((d) => d && { ...d, max_concurrency: Number(v) || 2 })} />
+            <Field label="Codex同時実行" value={String(draft?.codex_concurrency ?? 1)} onChange={(v) => setDraft((d) => d && { ...d, codex_concurrency: Number(v) || 1 })} />
+            <Field label="LM Studio同時実行" value={String(draft?.lmstudio_concurrency ?? 1)} onChange={(v) => setDraft((d) => d && { ...d, lmstudio_concurrency: Number(v) || 1 })} />
+            <Field label="品質合格点" value={String(draft?.quality_threshold ?? 85)} onChange={(v) => setDraft((d) => d && { ...d, quality_threshold: Number(v) || 85 })} />
+            <Field label="ログ保持日数" value={String(draft?.log_retention_days ?? 30)} onChange={(v) => setDraft((d) => d && { ...d, log_retention_days: Number(v) || 30 })} />
+          </div>
+          <Field label="Lunaモデル" value={draft?.luna_model ?? ""} onChange={(v) => setDraft((d) => d && { ...d, luna_model: v })} />
+          <Field label="Terraモデル" value={draft?.terra_model ?? ""} onChange={(v) => setDraft((d) => d && { ...d, terra_model: v })} />
+          <Field label="Solモデル" value={draft?.sol_model ?? ""} onChange={(v) => setDraft((d) => d && { ...d, sol_model: v })} />
+          <Field label="LM Studio既定モデル" value={draft?.lmstudio_default_model ?? ""} onChange={(v) => setDraft((d) => d && { ...d, lmstudio_default_model: v })} />
+          <Field label="成果物保存先" value={draft?.artifact_root ?? ""} onChange={(v) => setDraft((d) => d && { ...d, artifact_root: v })} />
+        </Panel>
         <Panel title="Keychain"><Field label="Obsidian Token" value={token} onChange={setToken} password /><Button onClick={async () => { await api.secretSet("obsidian", token); setToken(""); toast({ level: "info", title: "Keychain", body: "保存しました。" }); }} disabled={!token}>保存</Button><p className="mt-2 text-xs text-text2">APIキー欄は作りません。秘密はKeychainだけに保存します。</p></Panel>
         <Panel title="MCP"><div className="space-y-2">{mcp.map((s) => <div key={s.name} className="grid gap-2 rounded border border-base-700 p-2 text-sm sm:grid-cols-[1fr_auto_auto]"><span className="mono">{s.name}</span><span className="text-xs text-muted">{s.transport}</span><button onClick={() => toggleMcp(s)} className={`rounded-full border px-3 py-1 text-[11px] ${s.enabled ? "border-ok/40 text-ok" : "border-base-600 text-muted"}`}>{s.enabled ? "on" : "off"}</button></div>)}</div></Panel>
       </div>
@@ -573,7 +597,7 @@ function Metric({ label, value, tone }: { label: string; value: string | number;
 
 function TaskCardView({ task }: { task: TaskCard }) {
   const cat = task.category === "Engineering" ? "text-teal bg-teal/10 border-teal/30" : task.category === "Content" ? "text-warn bg-warn/10 border-warn/30" : "text-accent bg-accent-dim border-accent-border";
-  return <div className="rounded-lg border border-base-700 bg-base-900 p-3"><div className="flex items-center gap-2"><span className={`rounded border px-2 py-0.5 text-[10px] font-semibold ${cat}`}>{task.category}</span><Pill tone={task.status === "Waiting" ? "warn" : task.status === "Doing" ? "ok" : task.status === "Today" ? "accent" : "muted"}>{task.status}</Pill><span className="mono ml-auto text-[11px] text-muted">{task.id}</span></div><div className="mt-2 text-sm font-semibold">{task.title}</div><div className="mt-1 flex gap-3 text-[11px] text-muted"><span className="mono">risk {task.risk_score.toFixed(1)}</span><span>priority {task.priority}</span><span>{task.assignee}</span>{task.decision_required && <span className="ml-auto text-warn">要判断</span>}</div></div>;
+  return <div className="rounded-lg border border-base-700 bg-base-900 p-3"><div className="flex items-center gap-2"><span className={`rounded border px-2 py-0.5 text-[10px] font-semibold ${cat}`}>{task.category}</span><Pill tone={task.legacy_status === "Waiting" ? "warn" : task.legacy_status === "Doing" ? "ok" : task.legacy_status === "Today" ? "accent" : "muted"}>{task.legacy_status}</Pill><span className="mono ml-auto text-[11px] text-muted">{task.id}</span></div><div className="mt-2 text-sm font-semibold">{task.title}</div><div className="mt-1 flex gap-3 text-[11px] text-muted"><span className="mono">risk {task.risk_score.toFixed(1)}</span><span>priority {task.priority}</span><span>{task.assignee}</span>{task.decision_required && <span className="ml-auto text-warn">要判断</span>}</div></div>;
 }
 
 function QuotaDial({ quota }: { quota: Quota | null }) {

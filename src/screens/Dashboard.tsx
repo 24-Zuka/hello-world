@@ -40,8 +40,8 @@ export function Dashboard() {
   }, []);
 
   const activeThreads = Object.values(jobs).filter((j) => j.status === "running").length;
-  const waiting = tasks.filter((t) => t.status === "Waiting" || t.decision_required);
-  const today = tasks.filter((t) => t.status === "Today" || t.status === "Doing");
+  const waiting = tasks.filter((t) => t.legacy_status === "Waiting" || t.decision_required);
+  const today = tasks.filter((t) => t.legacy_status === "Today" || t.legacy_status === "Doing");
   const highRisk = tasks.filter((t) => t.risk_score >= 3.0);
 
   const quickAction = async (kind: "morning" | "review" | "research") => {
@@ -70,7 +70,7 @@ export function Dashboard() {
         <section className="xl:col-span-12">
           <div className="grid gap-3 md:grid-cols-4">
             <Metric label="Today" value={today.length} tone="accent" />
-            <Metric label="Doing" value={tasks.filter((t) => t.status === "Doing").length} tone="ok" />
+            <Metric label="Doing" value={tasks.filter((t) => t.legacy_status === "Doing").length} tone="ok" />
             <Metric label="Waiting" value={waiting.length} tone="warn" />
             <Metric label="Active Threads" value={`${activeThreads}/4`} tone={activeThreads >= 4 ? "warn" : "muted"} />
           </div>
@@ -176,7 +176,7 @@ function TaskRow({ task }: { task: TaskCard }) {
         <span className={`rounded border px-2 py-0.5 text-[10px] font-semibold ${CATEGORY_CLASS[task.category]}`}>
           {task.category}
         </span>
-        <Pill tone={STATUS_TONE[task.status]}>{task.status}</Pill>
+        <Pill tone={STATUS_TONE[task.legacy_status]}>{task.legacy_status}</Pill>
         <span className="mono ml-auto text-[11px] text-muted">{task.id}</span>
       </div>
       <div className="mt-1 text-sm font-medium text-text1">{task.title}</div>
