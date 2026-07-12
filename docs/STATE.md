@@ -9,6 +9,7 @@ Last updated: 2026-07-12 (Asia/Tokyo)
 - Mock and LM Studio end-to-end execution completed through the Bridge, including restart persistence and artifacts.
 - Codex CLI completed an end-to-end Bridge task through the ChatGPT-authenticated route. The verification saved `run.jsonl`, output, review, and final-review artifacts.
 - The release binary, macOS `.app`, and a mount-verified `JARVIS Cockpit_1.0.0_aarch64.dmg` build successfully. The DMG uses a non-interactive image creation step because Finder AppleScript packaging was unreliable in this environment.
+- The macOS startup crash caused by the obsolete `plugins.shell.scope` Tauri setting is fixed. The release app remained running after launch and the rebuilt DMG contains the verified executable.
 - No production deployment, external posting, push/merge automation, paid API route, or data deletion is enabled.
 
 ## Known environment constraints

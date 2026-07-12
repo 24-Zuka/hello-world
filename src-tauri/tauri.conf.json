@@ -27,12 +27,7 @@
   },
   "plugins": {
     "shell": {
-      "open": true,
-      "scope": [
-        { "name": "codex", "cmd": "codex", "args": true },
-        { "name": "git", "cmd": "git", "args": true },
-        { "name": "launchctl", "cmd": "launchctl", "args": true }
-      ]
+      "open": true
     }
   },
   "bundle": {
